@@ -2,7 +2,7 @@ use error::MessageError;
 use message::api::*;
 use message::Message;
 use network::{Connection, ServerHandler};
-use routing::identifier::{Identify, Identifier};
+use routing::identifier::{Identify, IdentifierU256};
 use routing::Routing;
 use procedures::Procedures;
 use std::error::Error;
@@ -29,13 +29,13 @@ impl ApiHandler {
         Self { routing, procedures }
     }
 
-    fn closest_peer(&self, identifier: Identifier) -> SocketAddr {
+    fn closest_peer(&self, identifier: IdentifierU256) -> SocketAddr {
         let routing = self.routing.lock().unwrap();
 
         **routing.closest_peer(identifier)
     }
 
-    fn find_peer(&self, identifier: Identifier) -> ::Result<SocketAddr> {
+    fn find_peer(&self, identifier: IdentifierU256) -> ::Result<SocketAddr> {
         let closest_peer = self.closest_peer(identifier);
 
         self.procedures.find_peer(identifier, closest_peer)

@@ -22,7 +22,7 @@ pub mod identifier;
 
 /// This struct stores routing information about other peers.
 #[derive(Debug)]
-pub struct Routing<T> {
+pub struct Routing<T: Identify> {
     pub current: IdentifierValue<T>,
     // TODO should maybe be an Option
     pub predecessor: IdentifierValue<T>,
@@ -73,7 +73,7 @@ impl<T: Identify + Copy + Clone> Routing<T> {
     }
 
     /// Checks whether this peer is responsible for the given identifier.
-    pub fn responsible_for(&self, identifier: Identifier) -> bool {
+    pub fn responsible_for(&self, identifier: Identifier<T::Output>) -> bool {
         identifier.is_between(
             &self.predecessor.identifier(),
             &self.current.identifier()
@@ -81,7 +81,7 @@ impl<T: Identify + Copy + Clone> Routing<T> {
     }
 
     /// Returns the peer closest to the given identifier.
-    pub fn closest_peer(&self, identifier: Identifier) -> &IdentifierValue<T> {
+    pub fn closest_peer(&self, identifier: Identifier<T::Output>) -> &IdentifierValue<T> {
         if self.responsible_for(identifier) {
             return &self.current;
         }

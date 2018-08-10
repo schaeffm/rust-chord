@@ -4,7 +4,7 @@ use error::MessageError;
 use message::Message;
 use message::p2p::{PeerFind, PredecessorNotify, StorageGet, StoragePut};
 use network::Connection;
-use routing::identifier::Identifier;
+use routing::identifier::IdentifierU256;
 use std::net::SocketAddr;
 use storage::Key;
 
@@ -21,7 +21,7 @@ impl Procedures {
     ///
     /// This iteratively sends PEER FIND messages to successive peers,
     /// beginning with `peer_addr` which could be taken from a finger table.
-    pub fn find_peer(&self, identifier: Identifier, mut peer_addr: SocketAddr)
+    pub fn find_peer(&self, identifier: IdentifierU256, mut peer_addr: SocketAddr)
          -> ::Result<SocketAddr>
     {
         debug!("Finding peer for identifier {}", identifier);

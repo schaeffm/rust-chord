@@ -2,7 +2,7 @@ use error::MessageError;
 use message::Message;
 use message::p2p::*;
 use network::{Connection, ServerHandler};
-use routing::identifier::{Identifier, Identify};
+use routing::identifier::{IdentifierU256, Identify};
 use routing::Routing;
 use std::collections::HashMap;
 use std::error::Error;
@@ -31,13 +31,13 @@ impl P2PHandler {
         Self { routing, storage }
     }
 
-    fn responsible_for(&self, identifier: Identifier) -> bool {
+    fn responsible_for(&self, identifier: IdentifierU256) -> bool {
         let routing = self.routing.lock().unwrap();
 
         routing.responsible_for(identifier)
     }
 
-    fn closest_peer(&self, identifier: Identifier) -> SocketAddr {
+    fn closest_peer(&self, identifier: IdentifierU256) -> SocketAddr {
         let routing = self.routing.lock().unwrap();
 
         **routing.closest_peer(identifier)
