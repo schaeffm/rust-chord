@@ -1,0 +1,117 @@
+\documentclass[a4paper, 11pt]{article}
+\usepackage{comment}
+\usepackage{fullpage}
+\usepackage{todonotes}
+\usepackage{hyperref}
+
+\begin{document}
+%Header-Make sure you update this information!!!!
+\noindent
+\large\textbf{VoidPhone Project} \hfill \textbf{Initial Report} \\
+\normalsize P2PSEC (IN2194)  \hfill Team 20 - Calcium\\
+Prof. Dr.-Ing Georg Carle \hfill Maximilian Schäffeler, Simon Ellmann \\
+Sree Harsha Totakura, Richard von Seck \hfill Due Date: 05/26/19
+
+% TODO
+% 1. Grade implementation
+%    - Module functional logic
+%    - Security Measures
+%    - P2P Protocol
+%    - API
+%    - Asynchronous IO
+%    - Message Formats
+%    - Tests
+%    - Coding Style
+%    - Documentation
+%
+% 2. List at least 3 shortcomings of the implementation
+% 3. Address how you intend to address these shortcomings
+% 4. Do you know of a better design to tweak the implementation?
+% 5. Do you know of any better alternatives for the dependency libraries used by the implementation?
+% 6. How do you plan to share the workload in your team
+% 7. Issues and complaints
+
+\section*{Team Composition}
+We are Maximilian Schäffeler and Simon Ellmann, both studying Informatics in our Masters'. As a team name we chose ``Calcium'' \footnote{Calcium is the element with atomic number 0x14.} and will be working on the Distributed Hash Table (DHT) project written in Rust in 2018 by Benedikt Seidl and Stefan Su.
+
+
+\section*{Assessment of the Implementation}
+\subsection{Module Functional Logic}
+TODO
+
+\subsection{Security Measures}
+TODO
+
+\subsection{P2P Protocol}
+TODO
+
+\subsection{API}
+TODO
+
+\subsection{Asynchronous IO}
+TODO
+
+\subsection{Message Formats}
+TODO
+
+\subsection{Tests}
+TODO
+
+\subsection{Coding Style}
+TODO
+
+\subsection{Documentation}
+TODO
+
+
+\section*{Shortcomings of the Implementation}
+TODO + our resolution
+
+
+\section*{Dependencies of the Implementation}
+TODO
+
+
+\section*{Workload Sharing}
+TODO
+
+
+% What is this section about?
+\section*{Issues and Complaints}
+TODO
+
+
+% \section*{Programming Language}
+% We decided to use Rust \cite{Rust} to implement the DHT. Rust is a modern system programming language with features known from high level programming languages. It includes a strong type system and supports object orientation as well as functional programming. This allows to write safe and fast code on a high abstraction level. One does not have to pay for this with runtime costs like garbage collection or interpreters as Rust compiles to native LLVM code using zero-cost abstractions \cite{RustFAQ}.
+% 
+% \section*{Operating System}
+% As operating systems, we use macOS and Linux which have the advantage of being Unix-based and thus supporting most development tools and libraries that may be needed during development. However, since Rust supports all major operating systems, it should also be possible to run the software under Windows, at least as long as we do not require any special libraries.
+% 
+% \section*{Build System}
+% Rust comes with its own build system called ``Cargo'' \cite{CargoBook}. Cargo serves as a build tool but can do much more. It only compiles files that have changed since the last compilation. Furthermore, it serves as a test runner, can create HTML documentation based on inline comments and manages the dependencies of our project.
+% Since Cargo is so easy to setup, we currently do not plan to provide further build files for Docker or Vagrant. If it turns out that our build process is more complicated than expected, we can still integrate a more elaborate build system.
+% 
+% \section*{Quality Measures}
+% Rust supports writing automated unit and integration tests natively and with Cargo it is a breeze to run them. By applying the concept of test driven development (TDD) we make sure that our code matches the intended design. We also aspire to maintain a high test coverage.
+% Furthermore, by its language design Rust avoids common bugs. It does not allow invalid memory access such as use after free or null pointers and its strong type system guarantees that all type errors are caught at compile time \cite{RustBook}.
+% 
+% \section*{Available Libraries}
+% The Rust standard library supports the usual network functionality like opening and listening for TCP connections and writing bytes. For more advanced functionality, one can use packages which are called ``crates'' in the context of Rust.
+% There exists a extensive package registry called ``Crates.io'' \cite{Crates} which contains a lot of useful libraries. However, as with all unmoderated package registries we have to be careful which packages to include in order to not download malicious code. If one specific feature is not available through a crate, one can also create bindings to existing C libraries.
+% 
+% \section*{Software License}
+% We decided to publish our project under the GNU Affero General Public License (AGPL)  \cite{AGPL} version 3. It is a free software license enforcing the copyleft principle. This means that peers who make changes to the code are required to publish it under the same license. Improvements to the software are therefore given back to the open source community and have to be made publicly available.
+% 
+% \section*{Previous Programming Experience within the Team}
+% We already know each other since the beginning of our studies and worked together on the ``Verleihtool'' software project for the student council  \cite{verleihtool}. Therefore we do not expect any specific difficulties in our working dynamic.
+% During our networking course, we have acquired basic knowledge in dealing with networking protocols and TCP standards. We plan to steadily learn the benefits of the Rust language features throughout the course of this project.
+% 
+% 
+% \section*{Workload Sharing}
+% Based on classical software engineering principles, we plan on dividing the project into smaller tasks in order to split the code into independent components. This allows us to work independently after defining our common interfaces.
+% Furthermore, we plan to work on individual branches but merge often into the master branch to integrate our changes continuously.
+
+\bibliographystyle{IEEEtran}
+\bibliography{../bibliography}
+
+\end{document}
