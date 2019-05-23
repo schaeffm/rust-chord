@@ -32,52 +32,89 @@ Sree Harsha Totakura, Richard von Seck \hfill Due Date: 05/26/19
 % 7. Issues and complaints
 
 \section*{Team Composition}
-We are Maximilian Schäffeler and Simon Ellmann, both studying Informatics in our Masters'. As a team name we chose ``Calcium'' \footnote{Calcium is the element with atomic number 0x14.} and will be working on the Distributed Hash Table (DHT) project written in Rust in 2018 by Benedikt Seidl and Stefan Su aka team ``Rhodium''.
+We are Maximilian Schäffeler and Simon Ellmann, both studying Informatics in our Masters'.
+As a team name we chose ``Calcium'' \footnote{Calcium is the element with atomic number 0x14.} and will be working on the Distributed Hash Table (DHT) project written in Rust in 2018 by Benedikt Seidl and Stefan Su aka team ``Rhodium''.
 
 
 \section*{Assessment of the Implementation}
-\subsection{Module Functional Logic}
+\subsection*{Module Functional Logic}
+Grading: $-$\\
+\\
 TODO
 
-\subsection{Security Measures}
+
+\subsection*{Security Measures}
+Grading: $\circ$\\
+\\
+There are no security measures implemented.
+
+
+\subsection*{P2P Protocol}
+Grading: $?$\\
+\\
 TODO
 
-\subsection{P2P Protocol}
+
+\subsection*{API}
+Grading: $?$\\
+\\
 TODO
 
-\subsection{API}
+
+\subsection*{Asynchronous IO}
+Grading: $\circ$\\
+\\
+No asynchronous functionality is included in the project yet.
+
+
+\subsection*{Message Formats}
+Grading: $?$\\
+\\
 TODO
 
-\subsection{Asynchronous IO}
-TODO
 
-\subsection{Message Formats}
-TODO
+\subsection*{Tests}
+Grading: $+$\\
+\\
+Overall there are 39 test cases included in the project.
+Most of the existing test cases assert correctness of the byte representation of different message types and parsing of bytes into messages.
+Unfortunately, there are no runtime tests that verify whether data is properly stored in and retrieved from the distributed hash table.
 
-\subsection{Tests}
-TODO
 
-\subsection{Coding Style}
-TODO
+\subsection*{Coding Style}
+Grading: $+$\\
+\\
+Coding style of the implementation is mostly consistent and reputable.
+Unfortunately, formatting is contrary to the Rust Style Guide\footnote{\url{https://github.com/rust-dev-tools/fmt-rfcs/blob/master/guide/guide.md}} in some places.
 
-\subsection{Documentation}
-TODO
 
+\subsection*{Documentation}
+Grading: $++$\\
+\\
+The implementation is very well documented.
+Every submodule contains a more or less detailed description about the module.
+There are many inline comments on used data types and methods.
+Additionaly, every major function contains logging information to facilitate debugging of the implementation.
+
+
+\subsection*{Subsumption}
+Overall Grading: $+$\\
+\\
+TODO
 
 \section*{Shortcomings of the Implementation}
 TODO + our resolution
 
 
 \section*{Dependencies of the Implementation}
-TODO
-
+All dependencies used by the implementation are deprecated and can be updated to newer versions.\\
+The specified version of the \texttt{ring}\footnote{\url{https://crates.io/crates/ring}} crate used to generate SHA256 hashes is not available anymore since the maintainer of this crate has yanked (i.e. removed) all previous versions of the crate from the Rust Package Registry \texttt{crates.io}\footnote{\url{https://crates.io/}} and continues to do so to indicate that previous versions are no longer supported\footnote{\url{https://github.com/briansmith/ring/issues/774}}.
+Unfortunately, the maintainer of \texttt{ring} does not understand that previous versions of a crate should never be removed from \texttt{crates.io} except in case of grave mistakes like security vulnerabilities or syntax errors because libraries depending on yanked crates cannot be built anymore as it is the case for this implementation.
+Since the maintainer of \texttt{ring} will yank versions of his crate in the future, this crate is not a reasonable choice for a library.
+We suggest to replace the dependency by either \texttt{rust-crypto}\footnote{\url{https://crates.io/crates/rust-crypto}} or \texttt{sha2}\footnote{\url{https://crates.io/crates/sha2}}.\\
+All other dependencies seem to be reasonable choices.
 
 \section*{Workload Sharing}
-TODO
-
-
-% What is this section about?
-\section*{Issues and Complaints}
 TODO
 
 
