@@ -35,15 +35,19 @@ fn main() {
     println!("Client to talk to the DHT api");
     println!("-----------------------------\n");
 
+    handle_help();
+
     loop {
         let command = read_line("Enter a command").unwrap();
 
         if "put" == command {
             handle_put(config);
-        }
-
-        if "get" == command {
+        } else if "get" == command {
             handle_get(config);
+        } else if "quit" == command {
+            break;
+        } else {
+            handle_help();
         }
     }
 }
@@ -61,6 +65,18 @@ fn read_line(question: &str) -> Option<String> {
             None
         }
     }
+}
+
+fn handle_help() {
+    let put_desc = "Store key-value pair in DHT";
+    let get_desc = "Retrieve value for some key from DHT";
+    let help_desc = "Display this message";
+    let quit_desc = "Exit the program";
+
+    print!(
+        "Commands:\n\tput:\t{}\n\tget:\t{}\n\tquit:\t{}\n\thelp:\t{}\n\n",
+        put_desc, get_desc, quit_desc, help_desc
+    );
 }
 
 fn handle_put(config: Config) {
