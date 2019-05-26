@@ -19,7 +19,7 @@ Sree Harsha Totakura, Richard von Seck \hfill Due Date: 05/26/19
 
 \section*{Team Composition}
 We are Maximilian Schäffeler and Simon Ellmann, both studying Informatics in our Masters'.
-As a team name we chose ``Calcium'' \footnote{Calcium is the element with atomic number 0x14.} and will be working on the Distributed Hash Table (DHT) project written in Rust \cite{Rust} in 2018 by Benedikt Seidl and Stefan Su aka team ``Rhodium''.
+As a team name we chose ``Calcium''\footnote{Calcium is the element with atomic number 0x14.} and will be working on the Distributed Hash Table (DHT) project written in Rust \cite{Rust} in 2018 by Benedikt Seidl and Stefan Su aka team ``Rhodium''.
 
 
 \section*{Assessment of the Implementation}
@@ -29,7 +29,7 @@ Grading: $\circ$\\
 The part of the implementation that decides whether a peer is responsible for a key is faulty in the edge case where there exists only a single peer.
 In the current state, the single client denies responsibility for all keys, where it actually is responsible for all of them.
 After fixing this bug, the rest of the implementation works as expected for a static network of peers.
-
+\\
 Key-value pairs are not redistributed between peers when nodes join or leave. Thus the peer network has to be built up before any data may be stored.
 Data for a key is currently only stored with a single peer, the replication index is not taken into account.
 
@@ -41,12 +41,12 @@ The most important attack mechanism against DHTs are Sybil attacks, where a larg
 These peers may then report faulty routing information or altered values. 
 Ultimately, those abilities can be abused for an Eclipse attack or may lead to data loss.
 In its current state, the project offers very basic protection against Sybil attacks as the id of all peers are derived from their IP address, which are a relatively scarce resource (considering IPv4).
-
+\\
 Furthermore, forged PUT messages by attackers may be used to overwrite existing data.
 A possible solution is to require PUT messages to be signed.
 There is currently no load balancing among peers for each specific key-value pair. 
 Using replication of data and a less deterministic key lookup, denial of service attacks that send a large number of requests for a single key would be harder to carry out.
-
+\\
 To counter Sibyl attacks, we plan to implement plausibility checks for IDs in the routing table.
 We will also assess if a proof of work required to join the network can further improve the situation.
 Effective protection against Sibyl attacks for DHTs is non-trivial.
@@ -121,10 +121,10 @@ We will mainly focus on the following topics/flaws to improve the existing imple
 	\item Testing (no runtime tests, ...)
 	\item Security measures (no defense against sibyl attacks and forged messages, ...)
 \end{itemize}
-
+\\
 We will implement the remaining parts of the chord algorithm as described in \cite{stoica2001chord}, which mostly concerns peers dynamically joining and leaving the network. 
 While fixing the logic flaws we will verify correctness of the program by adding more test cases and creating a test setup based on virtual machines that can be automatically executed.
-Depending on the needed amount of time for the previous tasks we might still try to add security measures to the implementation like signing of messages and various plausbility checks for information in the routing tables.
+Depending on the needed amount of time for the previous tasks we might still try to add security measures to the implementation like signing of messages and various plausibility checks for information in the routing tables.
 
 
 \section*{Dependencies of the Implementation}
