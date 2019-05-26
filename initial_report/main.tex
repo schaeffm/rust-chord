@@ -49,16 +49,22 @@ Data for a key is currently only stored with a single peer, the replication inde
 \subsection*{Security Measures}
 Grading: $\circ$\\
 \\
-There are no security measures implemented.
+There are no explicit security measures implemented.
 The most important attack mechanism against DHTs are Sybil attacks, where a large number of peers is under control of a singly entity. 
 These peers may then report faulty routing information or altered values. 
 Ultimately, those abilities can be abused for an Eclipse attack or may lead to data loss.
+In its current state, the project offers very basic protection against Sybil attacks as the id of all peers is derived from their IP address, which are a relatively scarce resource (considering IPv4).
 
 Furthermore, forged PUT messages by attackers may be used to overwrite existing data.
 A possible solution is to require PUT messages to be signed.
 
-There is no load balancing among peers for each specific key-value pair. 
+There is currently no load balancing among peers for each specific key-value pair. 
 Using replication of data and a less deterministic key lookup, denial of service attacks that send a large number of requests for a single key would be harder to carry out.
+
+To counter Sibyl attacks, we plan to implement plausibility checks for IDs in the routing table.
+We will also assess if a proof of work required to join the network can further improve the situation.
+Effective protection against Sibyl attacks for DHTs is non-trivial.
+There exists a survey of possible countermeasures \cite{urdaneta2011survey}, but each comes with a different set of drawbacks.
 
 \subsection*{P2P Protocol}
 Grading: $?$\\
@@ -107,7 +113,7 @@ Grading: $++$\\
 The implementation is very well documented.
 Every submodule contains a more or less detailed description about the module.
 There are many inline comments on used data types and methods.
-Additionaly, every major function contains logging information to facilitate debugging of the implementation.
+Additionally, every major function contains logging information to facilitate debugging of the implementation.
 
 
 \subsection*{Subsumption}
