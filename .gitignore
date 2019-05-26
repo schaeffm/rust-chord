@@ -8,12 +8,12 @@
 .vagrant/
 *.ini
 
-.aux
-.bbl
-.blg
-.fdb_latexmk
-.fls
-.log
-.out
-.pdf
-.synctex.gz
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.pdf
+*.synctex.gz
