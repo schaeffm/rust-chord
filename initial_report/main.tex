@@ -40,9 +40,11 @@ As a team name we chose ``Calcium'' \footnote{Calcium is the element with atomic
 \subsection*{Module Functional Logic}
 Grading: $\circ$\\
 \\
-The part of the implementation that decides whether a peer is responsible for a key is faulty in the edge case where there exists only a single peer. In the current state, the single client denies responsibility for all keys, where it actually is responsible for all of them.
+The part of the implementation that decides whether a peer is responsible for a key is faulty in the edge case where there exists only a single peer. 
+In the current state, the single client denies responsibility for all keys, where it actually is responsible for all of them.
 
-Key-value pairs are not redistributed between peers when nodes join or leave. Thus the peer network has to be built up before any data may be stored. Data for a key is currently only stored with a single peer, the replication index is not taken into account.
+Key-value pairs are not redistributed between peers when nodes join or leave. Thus the peer network has to be built up before any data may be stored.
+Data for a key is currently only stored with a single peer, the replication index is not taken into account.
 
 \subsection*{Security Measures}
 Grading: $\circ$\\
@@ -64,7 +66,8 @@ The existing implementation offers a simple REPL to interact with the DHT via AP
 \subsection*{Asynchronous IO}
 Grading: $\circ$\\
 \\
-No asynchronous functionality is included in the project yet. Instead, a thread-pool is used to handle multiple concurrent requests.
+No asynchronous functionality is included in the project yet. 
+Instead, a thread-pool is used to handle multiple concurrent requests.
 
 
 \subsection*{Message Formats}
@@ -100,7 +103,8 @@ Additionaly, every major function contains logging information to facilitate deb
 \subsection*{Subsumption}
 Overall Grading: $+$\\
 \\
-The implementation offers a solid foundation for implementing the remaining features of a DHT according to the Chord protocol. A lot of thought has been put in to create a project that is extensible.
+The implementation offers a solid foundation for implementing the remaining features of a DHT according to the Chord protocol. 
+A lot of thought has been put in to create a project that is extensible.
 
 \section*{Shortcomings of the Implementation}
 TODO + our resolution
@@ -115,8 +119,10 @@ We suggest to replace the dependency by either \texttt{rust-crypto}\footnote{\ur
 All other dependencies seem to be reasonable choices.
 
 \section*{Workload Sharing}
-Simon is the more experienced Rustacean, having implemented a user space network driver in Rust\footnote{\url{https://github.com/ixy-languages/ixy.rs}}. Nevertheless, we will share the workload equally by focusing on different aspects. Maximilian will be responsible for providing a more elaborate testing setup and fixing flaws in the existing codebase. To produce high-quality software, Simon 
-will work to ensure all new and existing code adheres to the standards of idiomatic Rust.
+Simon is the more experienced Rustacean, having implemented a user space network driver in Rust\footnote{\url{https://github.com/ixy-languages/ixy.rs}}.
+Nevertheless, we will share the workload equally by focusing on different aspects. 
+Maximilian will be responsible for providing a more elaborate testing setup and fixing flaws in the existing codebase. 
+To produce high-quality software, Simon will work to ensure all new and existing code adheres to the standards of idiomatic Rust.
 Additionally, we will work together when implementing new features and making major design decisions.
 
 \bibliographystyle{IEEEtran}
