@@ -33,7 +33,7 @@ Sree Harsha Totakura, Richard von Seck \hfill Due Date: 05/26/19
 
 \section*{Team Composition}
 We are Maximilian Schäffeler and Simon Ellmann, both studying Informatics in our Masters'.
-As a team name we chose ``Calcium'' \footnote{Calcium is the element with atomic number 0x14.} and will be working on the Distributed Hash Table (DHT) project written in Rust in 2018 by Benedikt Seidl and Stefan Su aka team ``Rhodium''.
+As a team name we chose ``Calcium'' \footnote{Calcium is the element with atomic number 0x14.} and will be working on the Distributed Hash Table (DHT) project written in Rust \cite{Rust} in 2018 by Benedikt Seidl and Stefan Su aka team ``Rhodium''.
 
 
 \section*{Assessment of the Implementation}
@@ -98,7 +98,7 @@ We plan on improving the setup to allow automatic testing.
 Grading: $+$\\
 \\
 Coding style of the implementation is mostly consistent and reputable.
-Unfortunately, formatting is contrary to the Rust Style Guide\footnote{\url{https://github.com/rust-dev-tools/fmt-rfcs/blob/master/guide/guide.md}} in some places.
+Unfortunately, formatting is contrary to the Rust Style Guide \cite{RustStyleGuide} in some places.
 
 
 \subsection*{Documentation}
@@ -122,14 +122,14 @@ TODO + our resolution
 
 \section*{Dependencies of the Implementation}
 All dependencies used by the implementation are deprecated and can be updated to newer versions.\\
-The specified version of the \texttt{ring}\footnote{\url{https://crates.io/crates/ring}} crate used to generate SHA256 hashes is not available anymore since the maintainer of this crate has yanked (i.e. removed) all previous versions of the crate from the Rust Package Registry \texttt{crates.io}\footnote{\url{https://crates.io/}} and continues to do so to indicate that previous versions are no longer supported\footnote{\url{https://github.com/briansmith/ring/issues/774}}.
+The specified version of the \texttt{ring} \cite{CratesIORing} crate used to generate SHA256 hashes is not available anymore since the maintainer of this crate has yanked (i.e. removed) all previous versions of the crate from the Rust Package Registry \texttt{crates.io} \cite{CratesIO} and continues to do so to indicate that previous versions are no longer supported\footnote{\url{https://github.com/briansmith/ring/issues/774}}.
 Unfortunately, the maintainer of \texttt{ring} does not understand that previous versions of a crate should never be removed from \texttt{crates.io} except in case of grave mistakes like security vulnerabilities or syntax errors because libraries depending on yanked crates cannot be built anymore as it is the case for this implementation.
 Since the maintainer of \texttt{ring} will yank versions of his crate in the future, this crate is not a reasonable choice for a library.
-We suggest to replace the dependency by either \texttt{rust-crypto}\footnote{\url{https://crates.io/crates/rust-crypto}} or \texttt{sha2}\footnote{\url{https://crates.io/crates/sha2}}.\\
+We suggest to replace the dependency by either \texttt{rust-crypto} \cite{CratesIOCrypto} or \texttt{sha2} \cite{CratesIOSha2}.\\
 All other dependencies seem to be reasonable choices.
 
 \section*{Workload Sharing}
-Simon is the more experienced Rustacean, having implemented a user space network driver in Rust\footnote{\url{https://github.com/ixy-languages/ixy.rs}}.
+Simon is the more experienced Rustacean, having implemented a user space network driver in Rust \cite{Ixy}.
 Nevertheless, we will share the workload equally by focusing on different aspects. 
 Maximilian will be responsible for providing a more elaborate testing setup and fixing flaws in the existing codebase. 
 To produce high-quality software, Simon will work to ensure all new and existing code adheres to the standards of idiomatic Rust.
