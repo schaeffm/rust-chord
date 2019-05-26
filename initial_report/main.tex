@@ -108,8 +108,20 @@ Overall Grading: $+$\\
 The implementation offers a solid foundation for implementing the remaining features of a DHT according to the Chord protocol. 
 A lot of thought has been put in to create a project that is extensible.
 
+
 \section*{Shortcomings of the Implementation}
-TODO + our resolution
+We will mainly focus on the following topics/flaws to improve the existing implementation:
+
+\begin{itemize}
+	\item Functional logic (no data replication, no new peers allowed after setup, ...)
+	\item Testing (no runtime tests, ...)
+	\item Security measures (no defense against sibyl attacks and forged messages, ...)
+\end{itemize}
+
+We will fix the functional logic flaws by storing data with multiple peers instead of a single one to prevent data loss in case a peer drops out of the network and by redistributing parts of the hash table when new peers join the network.
+While fixing the logic flaws we will verify correctness of the program by adding more test cases and creating a test setup based on virtual machines that can be automatically executed.
+Depending on the needed amount of time for the previous tasks we might still try to add security measures to the implementation like signing of messages and various plausbility checks for information in the routing tables.
+
 
 
 \section*{Dependencies of the Implementation}
