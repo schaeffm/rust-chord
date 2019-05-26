@@ -26,8 +26,9 @@ As a team name we chose ``Calcium'' \footnote{Calcium is the element with atomic
 \subsection*{Module Functional Logic}
 Grading: $\circ$\\
 \\
-The part of the implementation that decides whether a peer is responsible for a key is faulty in the edge case where there exists only a single peer. 
+The part of the implementation that decides whether a peer is responsible for a key is faulty in the edge case where there exists only a single peer.
 In the current state, the single client denies responsibility for all keys, where it actually is responsible for all of them.
+This bug is easily fixed, the rest of the implementation works as expected for a static network of peers.
 
 Key-value pairs are not redistributed between peers when nodes join or leave. Thus the peer network has to be built up before any data may be stored.
 Data for a key is currently only stored with a single peer, the replication index is not taken into account.
@@ -53,9 +54,12 @@ Effective protection against Sibyl attacks for DHTs is non-trivial.
 There exists a survey of possible countermeasures \cite{urdaneta2011survey}, but each comes with a different set of drawbacks.
 
 \subsection*{P2P Protocol}
-Grading: $?$\\
+Grading: $+$\\
 \\
-TODO
+All neccessary P2P messages for Chord are already fully implemented and working.
+As described above, the protocol is not yet robust against misbehaving peers and more advanced features of Chord are missing. 
+
+The P2P messages are well-designed and simple.
 
 
 \subsection*{API}
@@ -72,9 +76,10 @@ Instead, a thread-pool is used to handle multiple concurrent requests.
 
 
 \subsection*{Message Formats}
-Grading: $?$\\
+Grading: $+$\\
 \\
-TODO
+Both the API messages and P2P messages have a simple, easy to parse structure.
+There is some duplicated code for each message type, which we will try to get rid of using traits.
 
 
 \subsection*{Tests}
@@ -108,8 +113,7 @@ Overall Grading: $+$\\
 The implementation offers a solid foundation for implementing the remaining features of a DHT according to the Chord protocol. 
 A lot of thought has been put in to create a project that is extensible.
 
-
-\section*{Shortcomings of the Implementation}
+\section*{Plans to improve the Implementation}
 We will mainly focus on the following topics/flaws to improve the existing implementation:
 
 \begin{itemize}
@@ -118,10 +122,12 @@ We will mainly focus on the following topics/flaws to improve the existing imple
 	\item Security measures (no defense against sibyl attacks and forged messages, ...)
 \end{itemize}
 
-We will fix the functional logic flaws by storing data with multiple peers instead of a single one to prevent data loss in case a peer drops out of the network and by redistributing parts of the hash table when new peers join the network.
+We will implement the remaining parts of the chord algorithm as described in \cite{stoica2001chord}, which mostly concerns peers dynamically joining and leaving the network. 
+%We will fix the functional logic flaws by storing data with multiple peers instead of a single one to prevent data loss in case a peer drops out of the network and by redistributing parts of the hash table when new peers join the network.
 While fixing the logic flaws we will verify correctness of the program by adding more test cases and creating a test setup based on virtual machines that can be automatically executed.
+%Next, to test our improvements, we will have to implement automatic testing of such scenarios.
 Depending on the needed amount of time for the previous tasks we might still try to add security measures to the implementation like signing of messages and various plausbility checks for information in the routing tables.
-
+%Finally, we will try to build countermeasures against attacks on the DHT.
 
 
 \section*{Dependencies of the Implementation}
