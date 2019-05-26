@@ -54,9 +54,12 @@ Effective protection against Sibyl attacks for DHTs is non-trivial.
 There exists a survey of possible countermeasures \cite{urdaneta2011survey}, but each comes with a different set of drawbacks.
 
 \subsection*{P2P Protocol}
-Grading: $?$\\
+Grading: $+$\\
 \\
-TODO
+All neccessary P2P messages for Chord are already fully implemented and working.
+As described above, the protocol is not yet robust against misbehaving peers and more advanced features of Chord are missing. 
+
+The P2P messages are well-designed and simple.
 
 
 \subsection*{API}
@@ -73,9 +76,10 @@ Instead, a thread-pool is used to handle multiple concurrent requests.
 
 
 \subsection*{Message Formats}
-Grading: $?$\\
+Grading: $+$\\
 \\
-TODO
+Both the API messages and P2P messages have a simple, easy to parse structure.
+There is some duplicated code for each message type, which we will try to get rid of using traits.
 
 
 \subsection*{Tests}
