@@ -26,8 +26,9 @@ As a team name we chose ``Calcium'' \footnote{Calcium is the element with atomic
 \subsection*{Module Functional Logic}
 Grading: $\circ$\\
 \\
-The part of the implementation that decides whether a peer is responsible for a key is faulty in the edge case where there exists only a single peer. 
+The part of the implementation that decides whether a peer is responsible for a key is faulty in the edge case where there exists only a single peer.
 In the current state, the single client denies responsibility for all keys, where it actually is responsible for all of them.
+This bug is easily fixed, the rest of the implementation works as expected for a static network of peers.
 
 Key-value pairs are not redistributed between peers when nodes join or leave. Thus the peer network has to be built up before any data may be stored.
 Data for a key is currently only stored with a single peer, the replication index is not taken into account.
@@ -108,9 +109,11 @@ Overall Grading: $+$\\
 The implementation offers a solid foundation for implementing the remaining features of a DHT according to the Chord protocol. 
 A lot of thought has been put in to create a project that is extensible.
 
-\section*{Shortcomings of the Implementation}
-TODO + our resolution
-
+\section*{Plans to improve the Implementation}
+We identified three areas that we will focus our work on:
+First, we will implement the remaining parts of the chord algorithm as described in \cite{stoica2001chord}, which mostly concerns peers dynamically joining and leaving the network. 
+Next, to test our improvements, we will have to implement automatic testing of such scenarios.
+Finally, we will try to build countermeasures against attacks on the DHT.
 
 \section*{Dependencies of the Implementation}
 All dependencies used by the implementation are deprecated and can be updated to newer versions.\\
