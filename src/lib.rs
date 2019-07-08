@@ -65,6 +65,7 @@ extern crate ini;
 extern crate log;
 extern crate ring;
 extern crate threadpool;
+extern crate tokio;
 
 use crate::config::Config;
 use crate::handler::{ApiHandler, P2PHandler};

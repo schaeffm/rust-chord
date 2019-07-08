@@ -11,11 +11,19 @@ use crate::message::Message;
 use std::io;
 use std::io::prelude::*;
 use std::io::Cursor;
-use std::net::*;
+//use std::net::*;
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
-use threadpool::ThreadPool;
+//use threadpool::ThreadPool;
+use ini::ini::Error;
+use tokio::prelude::*;
+use tokio::io::copy;
+use tokio::net::TcpListener;
+use tokio::net::TcpStream;
+use std::net::Shutdown;
+use std::net::ToSocketAddrs;
+use std::net::SocketAddr;
 
 const MAX_MESSAGE_SIZE: usize = 64000;
 
@@ -53,10 +61,11 @@ impl Connection {
     /// ../../std/net/struct.TcpStream.html#method.set_read_timeout
     /// [`TcpStream::set_write_timeout`]:
     /// ../../std/net/struct.TcpStream.html#method.set_write_timeout
-    pub fn open<A: ToSocketAddrs>(addr: A, timeout_ms: u64) -> io::Result<Self> {
+    pub fn open(addr: SocketAddr, timeout_ms: u64) -> io::Result<Self> {
         // TODO add connection timeout
-        let stream = TcpStream::connect(addr)?;
+        let stream = TcpStream::connect(&addr);
 
+        /*
         trace!("Connection to {} - Opened", stream.peer_addr()?);
 
         let timeout = Duration::from_millis(timeout_ms);
@@ -64,6 +73,9 @@ impl Connection {
         stream.set_write_timeout(Some(timeout))?;
 
         Ok(Self::from_stream(stream))
+        */
+
+        unimplemented!();
     }
 
     fn from_stream(stream: TcpStream) -> Self {
@@ -233,15 +245,16 @@ impl<T: ServerHandler + Send + Sync + 'static> Server<T> {
     ///
     /// `num_workers` defines the number of worker threads which handle
     /// incoming requests in parallel.
-    pub fn listen<A: ToSocketAddrs>(
+    pub fn listen(
         self,
-        addr: A,
+        addr: SocketAddr,
         num_workers: usize,
     ) -> io::Result<thread::JoinHandle<()>> {
-        let listener = TcpListener::bind(addr)?;
+        let listener = TcpListener::bind(&addr)?;
 
         trace!("Server listening on address {}", listener.local_addr()?);
 
+        /*
         let handle = thread::spawn(move || {
             let pool = ThreadPool::new(num_workers);
 
@@ -253,6 +266,53 @@ impl<T: ServerHandler + Send + Sync + 'static> Server<T> {
             }
         });
 
-        Ok(handle)
+        return Ok(handle);
+        */
+
+        // Pull out a stream of sockets for incoming connections
+        let server = listener.incoming()
+            .map_err(|e| eprintln!("accept failed = {:?}", e))
+            .for_each(|sock| {
+                /*
+                // Split up the reading and writing parts of the
+                // socket.
+
+                let (reader, writer) = sock.split();
+
+                // A future that echos the data and returns how
+                // many bytes were copied...
+                let bytes_copied = tokio::io::copy(reader, writer);
+
+                // ... after which we'll print what happened.
+                let handle_conn = bytes_copied.map(|amt| {
+                    println!("wrote {:} bytes", amt.0)
+                }).map_err(|err| {
+                    eprintln!("IO error {:?}", err)
+                });
+                */
+
+                // https://tokio.rs/docs/futures/spawning/
+                // TODO: handler has to be Future
+                let handler = Arc::clone(&self.handler);
+                //handler.handle_incoming(sock);
+
+                trace!(
+                    "Handling incoming connection from {}",
+                    sock.peer_addr().unwrap()
+                );
+
+                let connection = Connection::from_stream(sock);
+
+                handler.handle_connection(connection);
+
+                // Spawn the future as a concurrent task.
+                tokio::spawn(handler)
+            });
+
+        // Start the Tokio runtime
+        tokio::run(server);
+
+
+        unimplemented!();
     }
 }
