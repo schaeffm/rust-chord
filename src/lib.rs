@@ -38,7 +38,7 @@
 //!
 //! ## Process Architecture
 //!
-//! This DHT implementation is be based on TCP for both the api interface and
+//! This DHT implementation is based on TCP for both the api interface and
 //! the peer-to-peer communication. Therefore, we listen on two addresses given
 //! in the config for the two interfaces and wait for incoming connections in
 //! two event loops. Each incoming request should be handled as fast as
