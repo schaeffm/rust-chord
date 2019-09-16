@@ -228,9 +228,9 @@ impl fmt::Display for Message {
 }
 
 pub trait MessagePayload: Sized {
-    fn parse(reader: &mut Read) -> io::Result<Self>;
+    fn parse(reader: &mut dyn Read) -> io::Result<Self>;
 
-    fn write_to(&self, writer: &mut Write) -> io::Result<()>;
+    fn write_to(&self, writer: &mut dyn Write) -> io::Result<()>;
 }
 
 #[cfg(test)]

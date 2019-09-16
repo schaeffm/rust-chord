@@ -87,7 +87,7 @@ pub mod routing;
 pub mod stabilization;
 pub mod storage;
 
-type Result<T> = std::result::Result<T, Box<Error>>;
+type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
 pub fn run(config: Config, bootstrap: Option<SocketAddr>) -> Result<()> {
     info!("Distributed Hash Table based on CHORD");
