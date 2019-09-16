@@ -36,7 +36,7 @@ impl Bootstrap {
     /// This first finds the peer which is currently responsible for our identifier range and
     /// will become our successor. After that we obtain the current predecessor of that peer
     /// and set it as our predecessor which also updates the predecessor information of the
-    /// scucessor peer. Finally, we initialize the finger table with our own address.
+    /// successor peer. Finally, we initialize the finger table with our own address.
     pub fn bootstrap(&self, timeout: u64) -> crate::Result<Routing<SocketAddr>> {
         let procedures = Procedures::new(timeout);
         let current_id = self.current_addr.identifier();
