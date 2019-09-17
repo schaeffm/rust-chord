@@ -39,6 +39,11 @@ impl Identifier {
         Identifier(U256::from_big_endian(identifier))
     }
 
+    /// Creates a new identifier from usize.
+    pub fn new_from_usize(identifier: usize) -> Self {
+        Identifier(U256::from(identifier))
+    }
+
     /// Create a new identifier with the given bit set.
     ///
     /// # Panics
@@ -202,7 +207,7 @@ impl Identify for Key {
 }
 
 /// Container for a value and its identifier
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct IdentifierValue<T> {
     value: T,
     identifier: Identifier,

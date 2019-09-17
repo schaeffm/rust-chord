@@ -55,7 +55,7 @@ impl<A: PeerAddr, C: ConnectionTrait<Address = A>> Bootstrap<C, A> {
 
         Ok(Routing::new(
             self.current_addr,
-            predecessor,
+            Some(predecessor),
             successor,
             finger_table,
         ))

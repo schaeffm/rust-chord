@@ -26,7 +26,7 @@ pub mod identifier;
 pub struct Routing<T> {
     pub current: IdentifierValue<T>,
     // TODO should maybe be an Option
-    pub predecessor: IdentifierValue<T>,
+    pub predecessor: Option<IdentifierValue<T>>,
     // TODO use BinaryHeap for multiple successors
     pub successor: IdentifierValue<T>,
     // TODO
@@ -35,10 +35,15 @@ pub struct Routing<T> {
 
 impl<T: Identify + Copy + Clone> Routing<T> {
     /// Creates a new `Routing` instance for the given initial values.
-    pub fn new(current: T, predecessor: T, successor: T, finger_table: Vec<T>) -> Self {
+    pub fn new(current: T, predecessor: Option<T>, successor: T, finger_table: Vec<T>) -> Self {
+        let predecessor = match predecessor {
+            Some(p) => Some(IdentifierValue::new(p)),
+            None => None,
+        };
+
         Self {
             current: IdentifierValue::new(current),
-            predecessor: IdentifierValue::new(predecessor),
+            predecessor: predecessor,
             successor: IdentifierValue::new(successor),
             finger_table: finger_table.into_iter().map(IdentifierValue::new).collect(),
         }
@@ -46,7 +51,7 @@ impl<T: Identify + Copy + Clone> Routing<T> {
 
     /// Sets the predecessor's address.
     pub fn set_predecessor(&mut self, new_pred: T) {
-        self.predecessor = IdentifierValue::new(new_pred);
+        self.predecessor = Some(IdentifierValue::new(new_pred)); // FIXME?
     }
 
     /// Sets the current successor.
@@ -73,7 +78,8 @@ impl<T: Identify + Copy + Clone> Routing<T> {
 
     /// Checks whether this peer is responsible for the given identifier.
     pub fn responsible_for(&self, identifier: Identifier) -> bool {
-        identifier.is_between(&self.predecessor.identifier(), &self.current.identifier())
+        unimplemented!()
+        //identifier.is_between(&self.predecessor.identifier(), &self.current.identifier())
     }
 
     /// Returns the peer closest to the given identifier.

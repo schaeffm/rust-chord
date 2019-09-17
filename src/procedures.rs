@@ -34,19 +34,25 @@ impl<C: ConnectionTrait<Address = A>, A: PeerAddr> Procedures<C, A> {
     pub fn find_peer(&self, identifier: Identifier, mut peer_addr: A) -> crate::Result<A> {
         debug!("Finding peer for identifier {}", identifier);
 
-        // TODO do not fail if one peer does not reply correctly
+        // TODO use successors from list if PeerNotFound
         loop {
             let mut con = C::open(peer_addr, self.timeout)?;
             let peer_find = PeerFind { identifier };
             con.send(Message::PeerFind(peer_find))?;
             let msg = con.receive()?;
 
-            let reply_addr = if let Message::PeerFound(peer_found) = msg {
-                peer_found.socket_addr
-            } else {
-                return Err(Box::new(MessageError::new(msg)));
-            };
+            if let Message::PeerFound(peer_found) = msg {
+                debug!(
+                    "Peer found for identifier {} with address {}",
+                    identifier, peer_found.socket_addr
+                );
 
+                Ok(peer_found.socket_addr)
+            } else {
+                Err(Box::new(MessageError::new(msg)))
+            }
+
+        /*
             if reply_addr == peer_addr {
                 debug!(
                     "Peer found for identifier {} with address {}",
@@ -55,9 +61,10 @@ impl<C: ConnectionTrait<Address = A>, A: PeerAddr> Procedures<C, A> {
 
                 return Ok(reply_addr);
             }
+        */
 
-            peer_addr = reply_addr;
-        }
+            //peer_addr = reply_addr;
+        //}
     }
 
     /// Send a storage get message to a peer with the objective to find a value for a given key.
@@ -146,7 +153,7 @@ impl<C: ConnectionTrait<Address = A>, A: PeerAddr> Procedures<C, A> {
 
         let msg = con.receive()?;
 
-        if let Message::PredecessorReply(predecessor_reply) = msg {
+        if let Message::PredecessorFound(predecessor_reply) = msg {
             info!("Predecessor received from peer {}", peer_addr);
 
             Ok(predecessor_reply.socket_addr)

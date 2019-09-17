@@ -127,7 +127,7 @@ where
             let finger_table = vec![config.listen_address; config.fingers];
             Routing::new(
                 config.listen_address,
-                config.listen_address,
+                Some(config.listen_address),
                 config.listen_address,
                 finger_table,
             )
