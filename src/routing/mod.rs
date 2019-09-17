@@ -77,15 +77,10 @@ impl<T: Identify + Copy + Clone> Routing<T> {
     }
 
     /// Returns the peer closest to the given identifier.
-    pub fn closest_peer(&self, identifier: Identifier) -> &IdentifierValue<T> {
-        if self.responsible_for(identifier) {
-            return &self.current;
-        }
+    pub fn closest_preceding_peer(&self, identifier: Identifier) -> &IdentifierValue<T> {
+        let entry = finger_table_entry_number(self.current.identifier(), identifier);
 
-        let diff = identifier - self.current.identifier();
-        let zeros = diff.leading_zeros() as usize;
-
-        self.finger_table.get(zeros).unwrap_or(&self.successor)
+        self.finger_table.get(entry as usize).unwrap_or(&self.successor)
     }
 
     pub fn preds_consistent(mut peers: Vec<Self>) -> bool {
@@ -96,5 +91,60 @@ impl<T: Identify + Copy + Clone> Routing<T> {
         let preds = peers.iter().map(|x| x.predecessor.identifier());
 
         ids.eq(preds)
+}
+
+/// Returns the finger table entry number for the closest predecessor.
+fn finger_table_entry_number(current: Identifier, lookup: Identifier) -> u8 {
+    let diff = lookup - current - Identifier::new_from_usize(1);
+    let zeros = diff.leading_zeros();
+
+    255 - zeros as u8
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bigint::U256;
+
+    #[test]
+    fn return_first_entry() {
+        let mut bytes1 = [0; 32];
+        let mut bytes2 = [0; 32];
+
+        U256::from(0).to_big_endian(&mut bytes1);
+        U256::from(2).to_big_endian(&mut bytes2);
+
+        let id1 = Identifier::new(&bytes1);
+        let id2 = Identifier::new(&bytes2);
+
+        assert_eq!(finger_table_entry_number(id1, id2), 0);
+    }
+
+    #[test]
+    fn return_second_entry() {
+        let mut bytes1 = [0; 32];
+        let mut bytes2 = [0; 32];
+
+        U256::from(0).to_big_endian(&mut bytes1);
+        U256::from(3).to_big_endian(&mut bytes2);
+
+        let id1 = Identifier::new(&bytes1);
+        let id2 = Identifier::new(&bytes2);
+
+        assert_eq!(finger_table_entry_number(id1, id2), 1);
+    }
+
+    #[test]
+    fn return_last_entry() {
+        let mut bytes1 = [0; 32];
+        let mut bytes2 = [0; 32];
+
+        U256::from(1).to_big_endian(&mut bytes1);
+        U256::from(0).to_big_endian(&mut bytes2);
+
+        let id1 = Identifier::new(&bytes1);
+        let id2 = Identifier::new(&bytes2);
+
+        assert_eq!(finger_table_entry_number(id1, id2), 255);
     }
 }

@@ -35,14 +35,14 @@ impl<A: PeerAddr, C: ConnectionTrait<Address = A>> ApiHandler<C, A> {
         }
     }
 
-    fn closest_peer(&self, identifier: Identifier) -> A {
+    fn closest_preceding_peer(&self, identifier: Identifier) -> A {
         let routing = self.routing.lock().unwrap();
 
-        **routing.closest_peer(identifier)
+        **routing.closest_preceding_peer(identifier)
     }
 
     fn find_peer(&self, identifier: Identifier) -> crate::Result<A> {
-        let closest_peer = self.closest_peer(identifier);
+        let closest_peer = self.closest_preceding_peer(identifier);
 
         self.procedures.find_peer(identifier, closest_peer)
     }

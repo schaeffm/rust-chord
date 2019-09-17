@@ -35,10 +35,10 @@ impl<A: PeerAddr> P2PHandler<A> {
         routing.responsible_for(identifier)
     }
 
-    fn closest_peer(&self, identifier: Identifier) -> A {
+    fn closest_preceding_peer(&self, identifier: Identifier) -> A {
         let routing = self.routing.lock().unwrap();
 
-        **routing.closest_peer(identifier)
+        **routing.closest_preceding_peer(identifier)
     }
 
     fn notify_predecessor(&self, predecessor_addr: A) -> A {
