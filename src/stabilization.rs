@@ -147,7 +147,8 @@ impl<C: ConnectionTrait<Address = A>, A: PeerAddr> Stabilization<C, A> {
         for i in 0..fingers {
             // TODO do not hardcode for 256 bits here
             let identifier = current.identifier() + Identifier::with_bit(255 - i);
-            let peer = self.procedures.find_peer(identifier, *successor)?;
+            // FIXME: do not send message to current
+            let peer = self.procedures.find_peer(identifier, *current)?;
 
             let mut routing = self.routing.lock().unwrap();
             routing.set_finger(i, peer);

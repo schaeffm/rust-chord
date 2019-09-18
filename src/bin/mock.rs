@@ -108,7 +108,7 @@ impl ConnectionTrait for MockConn {
     }
 
     fn receive(&mut self) -> Result<Message<Self::Address>> {
-        Ok(self.receiver.recv()?)
+        Ok(self.receiver.recv_timeout(Duration::from_millis(1000))?)
     }
 
     fn send(&mut self, msg: Message<Self::Address>) -> Result<()> {
@@ -148,10 +148,10 @@ fn create_peer(addr: u64, bootstrap: Option<MockAddr>) -> Arc<Peer<MockConn, Moc
     let config = Config {
         listen_address: MockAddr::P2PAddr(addr),
         api_address: MockAddr::ApiAddr(addr),
-        worker_threads: 5,
+        worker_threads: 50,
         timeout: 1000,
         fingers: 4,
-        stabilization_interval: 30,
+        stabilization_interval: 5,
     };
 
     let peer = Arc::new(Peer::<MockConn, MockAddr>::create(config).unwrap());
@@ -168,7 +168,7 @@ fn create_peer(addr: u64, bootstrap: Option<MockAddr>) -> Arc<Peer<MockConn, Moc
 }
 
 fn main() {
-    stderrlog::new().module(module_path!()).init().unwrap();
+    stderrlog::new().module(module_path!()).quiet(false).verbosity(2).init().unwrap();
 
     let mut peers = HashMap::new();
     peers.insert(1, create(1));
@@ -212,7 +212,7 @@ fn handle_inspect_impl(peers: &HashMap<u64, Arc<Peer<MockConn, MockAddr>>>) -> R
     if addr == "all" {
         for peer in peers.values() {
             println!("{}", peer);
-        };
+        }
     } else {
         let addr = addr.parse::<u64>()?;
         let peer = peers.get(&addr).ok_or("Peer not in network")?;

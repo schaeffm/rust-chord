@@ -78,15 +78,22 @@ impl<T: Identify + Copy + Clone> Routing<T> {
     /// Checks whether this peer is responsible for the given identifier.
     // TODO: remove this method if not needed anymore
     pub fn responsible_for(&self, identifier: Identifier) -> bool {
-        unimplemented!()
-        //identifier.is_between(&self.predecessor.identifier(), &self.current.identifier())
+        identifier.is_between(&self.predecessor.unwrap().identifier(), &self.current.identifier())
     }
 
     /// Returns the peer closest to the given identifier.
     pub fn closest_preceding_peer(&self, identifier: Identifier) -> &IdentifierValue<T> {
-        let entry = finger_table_entry_number(self.current.identifier(), identifier);
+        //if self.responsible_for(identifier) {
+        //    return &self.current;
+        //}
 
-        self.finger_table.get(entry as usize).unwrap_or(&self.successor.first().unwrap())
+        let diff = identifier - self.current.identifier();
+        let zeros = diff.leading_zeros() as usize;
+
+        match self.finger_table.get(zeros) {
+            Some(entry) if entry.identifier() != self.current.identifier() => entry,
+            _ => self.successor.first().unwrap(),
+        }
     }
 
     pub fn preds_consistent(mut peers: Vec<Self>) -> bool {

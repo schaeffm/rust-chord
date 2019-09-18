@@ -46,7 +46,6 @@ impl<A: PeerAddr> P2PHandler<A> {
         let mut routing = self.routing.lock().unwrap();
 
         if let Some(old_predecessor_addr) = routing.predecessor {
-
             // 1. check if the predecessor is closer than the previous predecessor
             if predecessor_addr.identifier().is_between(&old_predecessor_addr.identifier(), &routing.current.identifier()) {
             //if routing.responsible_for(predecessor_addr.identifier()) {
@@ -187,14 +186,15 @@ impl<A: PeerAddr> P2PHandler<A> {
     where
         C: ConnectionTrait<Address = A>,
     {
-        let routing = self.routing.lock().unwrap();
+        let current = self.routing.lock().unwrap().current.clone();
+        let successor = self.routing.lock().unwrap().successor.first().unwrap().clone();
         let identifier = peer_find.identifier;
 
         info!("Received PEER FIND request for identifier {}", identifier);
 
         // check if given key falls into successor range
-        if identifier.is_between(&routing.current.identifier(), &routing.successor.first().unwrap().identifier()) {
-            let socket_addr = **routing.successor.first().unwrap();
+        if identifier.is_between_end(&current.identifier(), &successor.identifier()) {
+            let socket_addr = *successor;
 
             info!("Replying with PEER FOUND with address {}", socket_addr);
 

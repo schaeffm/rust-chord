@@ -79,10 +79,18 @@ impl Identifier {
     /// assert!(!id3.is_between(&id1, &id2));
     /// ```
     pub fn is_between(&self, first: &Identifier, second: &Identifier) -> bool {
+        if first == second {
+            return first != self;
+        }
+
         let (diff1, _) = second.0.overflowing_sub(self.0);
         let (diff2, _) = second.0.overflowing_sub(first.0);
 
         diff1 < diff2
+    }
+
+    pub fn is_between_end(&self, first: &Identifier, second: &Identifier) -> bool {
+        self == second || self.is_between(first, second)
     }
 
     /// Returns the binary logarithm of this identifier minus the given offset.
@@ -291,8 +299,8 @@ mod tests {
         assert!(id1.is_between(&id2, &id1));
         assert!(!id1.is_between(&id1, &id2));
 
-        // there is nothing between an id and itself
-        assert!(!id2.is_between(&id1, &id1));
+        // anything except itself is between an id and itself
+        assert!(id2.is_between(&id1, &id1));
         assert!(!id1.is_between(&id1, &id1));
     }
 
