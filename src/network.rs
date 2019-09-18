@@ -62,7 +62,7 @@ where
     //fn local_addr(&self) -> Result<Self::Address>;
     fn shutdown(self) -> Result<()>;
     fn bind(addr: Self::Address) -> Result<Self::Listener>;
-    fn listen<'a>(listener: &'a Self::Listener) -> Box<'a + Iterator<Item = Self>>;
+    fn listen<'a>(listener: &'a Self::Listener) -> Box<dyn 'a + Iterator<Item = Self>>;
 }
 
 impl ConnectionTrait for Connection {
@@ -120,7 +120,7 @@ impl ConnectionTrait for Connection {
         Ok(self.stream.shutdown(Shutdown::Both)?)
     }
 
-    fn listen<'a>(listener: &'a Self::Listener) -> Box<'a + Iterator<Item = Self>> {
+    fn listen<'a>(listener: &'a Self::Listener) -> Box<dyn 'a + Iterator<Item = Self>> {
         Box::new(
             listener
                 .incoming()
@@ -300,7 +300,7 @@ pub trait ServerHandler<C> {
 /// # use std::io;
 /// #
 /// # struct TestHandler;
-/// # impl ServerHandler for TestHandler {
+/// # impl ServerHandler<Connection> for TestHandler {
 /// #     fn handle_connection(&self, _: Connection) {}
 /// #     fn handle_error(&self, _: io::Error) {}
 /// # }
@@ -309,7 +309,7 @@ pub trait ServerHandler<C> {
 /// #
 /// let server = Server::new(handler);
 ///
-/// server.listen("127.0.0.1:8080", 4)
+/// server.listen("127.0.0.1:8080".parse().unwrap(), 4)
 ///     .expect("could not bind to port");
 /// ```
 pub struct Server<T> {

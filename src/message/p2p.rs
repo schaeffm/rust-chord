@@ -95,12 +95,38 @@ pub struct PredecessorNotify<A> {
 }
 
 /// When a peer receives a [`PredecessorGet`] message, it is expected to reply
-/// with this message and the address of its predecessor.
+/// with this message and the address of its predecessor or [`PredecessorNotFound`].
 ///
-/// [`PredecessorGet`]: struct.PredecessorGet.html
+/// [`PredecessorFound`]: struct.PredecessorFound.html
+/// [`PredecessorNotFound`]: struct.PredecessorNotFound.html
 #[derive(Debug, PartialEq)]
-pub struct PredecessorReply<A> {
+pub struct PredecessorFound<A> {
     pub socket_addr: A,
+}
+
+/// When a peer receives a [`PredecessorFound`] message, it is expected to reply
+/// with this message or [`PredecessorFound`] and the address of its predecessor.
+///
+/// [`PredecessorNotFound`]: struct.PredecessorNotFound.html
+/// [`PredecessorFound`]: struct.PredecessorFound.html
+#[derive(Debug, PartialEq)]
+pub struct PredecessorNotFound {}
+
+/// When a peer receives a [`SuccessorsRequest`] message, it is expected to reply
+/// a [`SuccessorsReply`] message with its current successor list.
+///
+/// [`SuccessorsRequest`]: struct.SuccessorsRequest.html
+/// [`SuccessorsReply`]: struct.SuccessorsReply.html
+#[derive(Debug, PartialEq)]
+pub struct SuccessorsRequest {}
+
+/// Reply to a [`SuccessorsRequest`] message.
+///
+/// [`SuccessorsRequest`]: struct.SuccessorsRequest.html
+/// [`SuccessorsReply`]: struct.SuccessorsReply.html
+#[derive(Debug, PartialEq)]
+pub struct SuccessorsReply {
+    pub successors: Vec<SocketAddr>,
 }
 
 impl MessagePayload for StorageGet {
@@ -309,7 +335,7 @@ impl MessagePayload for PredecessorNotify<SocketAddr> {
     }
 }
 
-impl MessagePayload for PredecessorReply<SocketAddr> {
+impl MessagePayload for PredecessorFound<SocketAddr> {
     fn parse(reader: &mut dyn Read) -> io::Result<Self> {
         let mut ip_arr = [0; 16];
         reader.read_exact(&mut ip_arr)?;
@@ -325,7 +351,7 @@ impl MessagePayload for PredecessorReply<SocketAddr> {
 
         let socket_addr = SocketAddr::new(ip_address, port);
 
-        Ok(PredecessorReply { socket_addr })
+        Ok(PredecessorFound { socket_addr })
     }
 
     fn write_to(&self, writer: &mut dyn Write) -> io::Result<()> {
@@ -336,6 +362,47 @@ impl MessagePayload for PredecessorReply<SocketAddr> {
 
         writer.write_all(&ip_address.octets())?;
         writer.write_u16::<NetworkEndian>(self.socket_addr.port())?;
+
+        Ok(())
+    }
+}
+
+impl MessagePayload for SuccessorsReply {
+    fn parse(reader: &mut dyn Read) -> io::Result<Self> {
+        let mut successors = Vec::new();
+
+        // TODO: Variable size of successors list
+        for _ in 0..4 {
+            let mut ip_arr = [0; 16];
+            reader.read_exact(&mut ip_arr)?;
+
+            let ipv6 = Ipv6Addr::from(ip_arr);
+
+            let ip_address = match ipv6.to_ipv4() {
+                Some(ipv4) => IpAddr::V4(ipv4),
+                None => IpAddr::V6(ipv6),
+            };
+
+            let port = reader.read_u16::<NetworkEndian>()?;
+
+            let socket_addr = SocketAddr::new(ip_address, port);
+
+            successors.push(socket_addr);
+        }
+
+        Ok(SuccessorsReply { successors })
+    }
+
+    fn write_to(&self, writer: &mut dyn Write) -> io::Result<()> {
+        for socket_addr in &self.successors {
+            let ip_address = match socket_addr.ip() {
+                IpAddr::V4(ipv4) => ipv4.to_ipv6_mapped(),
+                IpAddr::V6(ipv6) => ipv6,
+            };
+
+            writer.write_all(&ip_address.octets())?;
+            writer.write_u16::<NetworkEndian>(socket_addr.port())?;
+        }
 
         Ok(())
     }
@@ -537,7 +604,7 @@ mod tests {
             31, 144,
         ];
 
-        let msg = PredecessorReply {
+        let msg = PredecessorFound {
             socket_addr: "127.0.0.1:8080".parse().unwrap(),
         };
 
@@ -554,7 +621,7 @@ mod tests {
             31, 144,
         ];
 
-        let msg = PredecessorReply {
+        let msg = PredecessorFound {
             socket_addr: "[2001:db8:85a3::8a23:370:7334]:8080".parse().unwrap(),
         };
 

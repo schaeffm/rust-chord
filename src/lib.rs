@@ -74,7 +74,6 @@ use crate::routing::Routing;
 use crate::stabilization::{Bootstrap, Stabilization};
 use std::error::Error;
 use std::fmt::Display;
-use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -127,7 +126,7 @@ where
             let finger_table = vec![config.listen_address; config.fingers];
             Routing::new(
                 config.listen_address,
-                config.listen_address,
+                Some(config.listen_address),
                 config.listen_address,
                 finger_table,
             )
@@ -207,8 +206,8 @@ impl<C: ConnectionTrait<Address = A>, A: PeerAddr + Display + Sync> Display for 
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let routing = self.routing.lock().unwrap();
         let addr = *routing.current;
-        let pred = *routing.predecessor;
-        let succ = *routing.successor;
+        let pred = routing.predecessor;
+        let succ = &routing.successor;
         let fingers: Vec<A> = routing.finger_table.clone().into_iter().map(|x| *x).collect();
         write!(f,
                "Peer {:?}\n\

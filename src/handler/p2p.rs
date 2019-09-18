@@ -2,7 +2,7 @@ use crate::error::MessageError;
 use crate::message::p2p::*;
 use crate::message::Message;
 use crate::network::{ConnectionTrait, PeerAddr, ServerHandler};
-use crate::routing::identifier::{Identifier, Identify};
+use crate::routing::identifier::Identifier;
 use crate::routing::Routing;
 use crate::storage::Key;
 use std::collections::HashMap;
@@ -29,49 +29,54 @@ impl<A: PeerAddr> P2PHandler<A> {
         Self { routing, storage }
     }
 
+    // FIXME? Does a node have to check / can it check if it is responsible for a key?
     fn responsible_for(&self, identifier: Identifier) -> bool {
         let routing = self.routing.lock().unwrap();
 
         routing.responsible_for(identifier)
     }
 
-    fn closest_peer(&self, identifier: Identifier) -> A {
+    fn closest_preceding_peer(&self, identifier: Identifier) -> A {
         let routing = self.routing.lock().unwrap();
 
-        **routing.closest_peer(identifier)
+        **routing.closest_preceding_peer(identifier)
     }
 
-    fn notify_predecessor(&self, predecessor_addr: A) -> A {
+    fn notify_predecessor(&self, predecessor_addr: A) -> Option<A> {
         let mut routing = self.routing.lock().unwrap();
 
-        let old_predecessor_addr = *routing.predecessor;
+        if let Some(old_predecessor_addr) = routing.predecessor {
 
-        // 1. check if the predecessor is closer than the previous predecessor
-        if routing.responsible_for(predecessor_addr.identifier()) {
-            // 2. update the predecessor if necessary
-            routing.set_predecessor(predecessor_addr);
+            // 1. check if the predecessor is closer than the previous predecessor
+            if predecessor_addr.identifier().is_between(&old_predecessor_addr.identifier(), &routing.current.identifier()) {
+            //if routing.responsible_for(predecessor_addr.identifier()) {
+                // 2. update the predecessor if necessary
+                routing.set_predecessor(predecessor_addr);
 
-            info!("Updated predecessor to new address {}", predecessor_addr);
+                info!("Updated predecessor to new address {}", predecessor_addr);
 
-            // TODO maybe check whether old predecessor is actually still reachable?
-            // TODO give data to new predecessor!!!
+                // TODO maybe check whether old predecessor is actually still reachable?
+                // TODO give data to new predecessor!!!
+            }
+
+            if *routing.predecessor.unwrap() == *routing.current {
+                // if predecessor points to ourselves, update it to this peer.
+                routing.set_predecessor(predecessor_addr);
+
+                info!("Updated predecessor to new address {}", predecessor_addr);
+            }
+
+            if **routing.successor.first().unwrap() == *routing.current {
+                // If successor points to ourselves, update it to this peer.
+                routing.set_successor(predecessor_addr);
+
+                info!("Updated successor to new address {}", predecessor_addr);
+            }
+
+            Some(*old_predecessor_addr)
+        } else {
+            None
         }
-
-        if *routing.predecessor == *routing.current {
-            // if predecessor points to ourselves, update it to this peer.
-            routing.set_predecessor(predecessor_addr);
-
-            info!("Updated predecessor to new address {}", predecessor_addr);
-        }
-
-        if *routing.successor == *routing.current {
-            // If successor points to ourselves, update it to this peer.
-            routing.set_successor(predecessor_addr);
-
-            info!("Updated successor to new address {}", predecessor_addr);
-        }
-
-        old_predecessor_addr
     }
 
     fn get_from_storage(&self, key: Key) -> Option<Vec<u8>> {
@@ -108,7 +113,8 @@ impl<A: PeerAddr> P2PHandler<A> {
         info!("Received STORAGE GET request for key {}", key);
 
         // 1. check if given key falls into range
-        if self.responsible_for(key.identifier()) {
+        // FIXME?
+        //if self.responsible_for(key.identifier()) {
             // 2. find value for given key
             let value_opt = self.get_from_storage(key);
 
@@ -129,8 +135,8 @@ impl<A: PeerAddr> P2PHandler<A> {
             };
 
             // 3. reply with STORAGE GET SUCCESS or STORAGE FAILURE
-            con.send(msg)?
-        }
+            con.send(msg)?;
+        //}
 
         Ok(())
     }
@@ -151,7 +157,8 @@ impl<A: PeerAddr> P2PHandler<A> {
         info!("Received STORAGE PUT request for key {}", key);
 
         // 1. check if given key falls into range
-        if self.responsible_for(key.identifier()) {
+        // FIXME?
+        //if self.responsible_for(key.identifier()) {
             // 2. save value for given key
             let msg = if self.put_to_storage(key, storage_put.value) {
                 info!(
@@ -171,7 +178,7 @@ impl<A: PeerAddr> P2PHandler<A> {
 
             // 3. reply with STORAGE PUT SUCCESS or STORAGE FAILURE
             con.send(msg)?;
-        }
+        //}
 
         Ok(())
     }
@@ -180,21 +187,47 @@ impl<A: PeerAddr> P2PHandler<A> {
     where
         C: ConnectionTrait<Address = A>,
     {
+        let routing = self.routing.lock().unwrap();
         let identifier = peer_find.identifier;
 
         info!("Received PEER FIND request for identifier {}", identifier);
 
-        // 1. check if given key falls into range
-        let socket_addr = self.closest_peer(identifier);
+        // check if given key falls into successor range
+        if identifier.is_between(&routing.current.identifier(), &routing.successor.first().unwrap().identifier()) {
+            let socket_addr = **routing.successor.first().unwrap();
 
-        info!("Replying with PEER FOUND with address {}", socket_addr);
+            info!("Replying with PEER FOUND with address {}", socket_addr);
 
-        // 2. reply with PEER FOUND either with this node or the best next node
-        let peer_found = PeerFound {
-            identifier,
-            socket_addr,
-        };
-        con.send(Message::PeerFound(peer_found))?;
+            let peer_found = PeerFound {
+                identifier,
+                socket_addr,
+            };
+            con.send(Message::PeerFound(peer_found))?;
+        } else {
+            // get closest preceding peer to send a PeerFind request
+            let peer_addr = self.closest_preceding_peer(identifier);
+
+            let mut new_con = C::open(peer_addr, 3600)?;
+            let peer_find = PeerFind { identifier };
+            new_con.send(Message::PeerFind(peer_find))?;
+            let msg = new_con.receive()?;
+
+            if let Message::PeerFound(peer_found) = msg {
+                let socket_addr = peer_found.socket_addr;
+
+                // reply to original request with PEER FOUND
+                info!("Replying with PEER FOUND with address {}", socket_addr);
+
+                let peer_found = PeerFound {
+                    identifier,
+                    socket_addr,
+                };
+
+                con.send(Message::PeerFound(peer_found))?;
+            } else {
+                return Err(Box::new(MessageError::new(msg)));
+            }
+        }
 
         Ok(())
     }
@@ -211,16 +244,23 @@ impl<A: PeerAddr> P2PHandler<A> {
 
         info!("Received PREDECESSOR GET request from {}", predecessor_addr);
 
-        let socket_addr = self.notify_predecessor(predecessor_addr);
+        if let Some(socket_addr) = self.notify_predecessor(predecessor_addr) {
+            info!(
+                "Replying with PREDECESSOR FOUND and address {}",
+                socket_addr
+            );
 
-        info!(
-            "Replying with PREDECESSOR REPLY and address {}",
-            socket_addr
-        );
+            // 3. return the current predecessor with PREDECESSOR FOUND
+            let predecessor_found = PredecessorFound { socket_addr };
+            con.send(Message::PredecessorFound(predecessor_found))?;
+        } else {
+            info!(
+                "Replying with PREDECESSOR NOT FOUND"
+            );
 
-        // 3. return the current predecessor with PREDECESSOR REPLY
-        let predecessor_reply = PredecessorReply { socket_addr };
-        con.send(Message::PredecessorReply(predecessor_reply))?;
+            // 3. return the current predecessor with PREDECESSOR FOUND
+            con.send(Message::PredecessorNotFound)?;
+        }
 
         Ok(())
     }

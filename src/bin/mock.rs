@@ -127,7 +127,7 @@ impl ConnectionTrait for MockConn {
         Ok(receiver)
     }
 
-    fn listen<'a>(listener: &'a Self::Listener) -> Box<'a + Iterator<Item = Self>> {
+    fn listen<'a>(listener: &'a Self::Listener) -> Box<dyn 'a + Iterator<Item = Self>> {
         Box::new(listener.iter().map(move |(receiver, sender_ch)| {
             let (sender, receiver_peer) = channel();
             sender_ch.send(receiver_peer).ok();

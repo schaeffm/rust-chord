@@ -78,7 +78,13 @@ pub enum Message<A> {
     /// its old predecessor.
     PredecessorNotify(PredecessorNotify<A>),
     /// Reply to `PREDECESSOR GET` with the predecessor's address.
-    PredecessorReply(PredecessorReply<A>),
+    PredecessorFound(PredecessorFound<A>),
+    /// Reply to `PREDECESSOR GET` with the predecessor's address.
+    PredecessorNotFound,
+    /// Request a peer's successor list.
+    SuccessorsRequest(),
+    /// Request to `SUCCESSORS REQUEST` with the successor list.
+    SuccessorsReply(SuccessorsReply),
 }
 
 impl Message<SocketAddr> {
@@ -96,7 +102,11 @@ impl Message<SocketAddr> {
     const PEER_FIND: u16 = 1050;
     const PEER_FOUND: u16 = 1051;
     const PREDECESSOR_NOTIFY: u16 = 1052;
-    const PREDECESSOR_REPLY: u16 = 1053;
+    const PREDECESSOR_FOUND: u16 = 1053;
+    const PREDECESSOR_NOT_FOUND: u16 = 1053;
+
+    const SUCCESSORS_REQUEST: u16 = 1080;
+    const SUCCESSORS_REPLY: u16 = 1081;
 
     pub fn parse<T: Read>(mut reader: T) -> io::Result<Self> {
         let size = reader.read_u16::<NetworkEndian>()?;
@@ -130,7 +140,7 @@ impl Message<SocketAddr> {
             Self::PREDECESSOR_NOTIFY => {
                 MessagePayload::parse(reader).map(Message::PredecessorNotify)
             }
-            Self::PREDECESSOR_REPLY => MessagePayload::parse(reader).map(Message::PredecessorReply),
+            Self::PREDECESSOR_FOUND => MessagePayload::parse(reader).map(Message::PredecessorFound),
             _ => Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 "Invalid message type",
@@ -191,9 +201,19 @@ impl Message<SocketAddr> {
                 writer.write_u16::<NetworkEndian>(Self::PREDECESSOR_NOTIFY)?;
                 predecessor_get.write_to(&mut writer)?;
             }
-            Message::PredecessorReply(predecessor_reply) => {
-                writer.write_u16::<NetworkEndian>(Self::PREDECESSOR_REPLY)?;
+            Message::PredecessorFound(predecessor_reply) => {
+                writer.write_u16::<NetworkEndian>(Self::PREDECESSOR_FOUND)?;
                 predecessor_reply.write_to(&mut writer)?;
+            }
+            Message::PredecessorNotFound => {
+                writer.write_u16::<NetworkEndian>(Self::PREDECESSOR_NOT_FOUND)?;
+            }
+            Message::SuccessorsRequest() => {
+                writer.write_u16::<NetworkEndian>(Self::SUCCESSORS_REQUEST)?;
+            }
+            Message::SuccessorsReply(successors_reply) => {
+                writer.write_u16::<NetworkEndian>(Self::SUCCESSORS_REPLY)?;
+                successors_reply.write_to(&mut writer)?;
             }
         }
 
@@ -225,7 +245,10 @@ where
             Message::PeerFind(_) => "PEER FIND",
             Message::PeerFound(_) => "PEER FOUND",
             Message::PredecessorNotify(_) => "PREDECESSOR GET",
-            Message::PredecessorReply(_) => "PREDECESSOR REPLY",
+            Message::PredecessorFound(_) => "PREDECESSOR FOUND",
+            Message::PredecessorNotFound => "PREDECESSOR NOT FOUND",
+            Message::SuccessorsRequest() => "SUCCESSORS REQUEST",
+            Message::SuccessorsReply(_) => "SUCCESSORS REPLY",
         };
 
         name.fmt(f)
