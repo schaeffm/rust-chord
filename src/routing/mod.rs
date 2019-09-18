@@ -17,11 +17,12 @@
 //! [`Routing`]: struct.Routing.html
 
 use self::identifier::*;
+use crate::Result;
 
 pub mod identifier;
 
 /// This struct stores routing information about other peers.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Routing<T> {
     pub current: IdentifierValue<T>,
     // TODO should maybe be an Option
@@ -29,7 +30,7 @@ pub struct Routing<T> {
     // TODO use BinaryHeap for multiple successors
     pub successor: IdentifierValue<T>,
     // TODO
-    finger_table: Vec<IdentifierValue<T>>,
+    pub finger_table: Vec<IdentifierValue<T>>,
 }
 
 impl<T: Identify + Copy + Clone> Routing<T> {
@@ -85,5 +86,15 @@ impl<T: Identify + Copy + Clone> Routing<T> {
         let zeros = diff.leading_zeros() as usize;
 
         self.finger_table.get(zeros).unwrap_or(&self.successor)
+    }
+
+    pub fn preds_consistent(mut peers: Vec<Self>) -> bool {
+        let len = peers.len();
+        peers.sort_by(|a, b| a.current.identifier().cmp(&b.current.identifier()));
+        // rotate ids by one
+        let ids = peers.iter().map(|x| x.current.identifier()).cycle().skip(1).take(len);
+        let preds = peers.iter().map(|x| x.predecessor.identifier());
+
+        ids.eq(preds)
     }
 }

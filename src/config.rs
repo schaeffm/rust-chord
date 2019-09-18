@@ -3,17 +3,17 @@ use std::net::SocketAddr;
 use std::path::Path;
 
 #[derive(Copy, Clone, Debug)]
-pub struct Config {
-    pub listen_address: SocketAddr,
-    pub api_address: SocketAddr,
+pub struct Config<A> {
+    pub listen_address: A,
+    pub api_address: A,
     pub worker_threads: usize,
     pub timeout: u64,
     pub fingers: usize,
     pub stabilization_interval: u64,
 }
 
-impl Config {
-    pub fn load_from_file<P: AsRef<Path>>(filename: P) -> crate::Result<Config> {
+impl Config<SocketAddr> {
+    pub fn load_from_file<P: AsRef<Path>>(filename: P) -> crate::Result<Self> {
         let conf = Ini::load_from_file(filename)?;
 
         let dht = conf.section(Some("dht")).ok_or("missing section `dht`")?;

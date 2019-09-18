@@ -68,11 +68,13 @@ extern crate threadpool;
 
 use crate::config::Config;
 use crate::handler::{ApiHandler, P2PHandler};
-use crate::network::Server;
+use crate::network::ConnectionTrait;
+use crate::network::{PeerAddr, Server};
 use crate::routing::Routing;
 use crate::stabilization::{Bootstrap, Stabilization};
 use std::error::Error;
-use std::net::SocketAddr;
+use std::fmt::Display;
+use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -87,63 +89,132 @@ pub mod routing;
 pub mod stabilization;
 pub mod storage;
 
-type Result<T> = std::result::Result<T, Box<dyn Error>>;
+pub type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
-pub fn run(config: Config, bootstrap: Option<SocketAddr>) -> Result<()> {
-    info!("Distributed Hash Table based on CHORD");
-    info!("-------------------------------------\n");
-    debug!(
-        "The current configuration is as follows.\n\n{:#?}\n",
-        &config
-    );
+#[derive(Clone)]
+pub struct Peer<C, A>
+where
+    C: ConnectionTrait<Address = A>,
+    A: PeerAddr + Sync,
+{
+    config: Config<A>,
+    routing: Arc<Mutex<Routing<A>>>,
+    p2p_handler: Arc<P2PHandler<A>>,
+    api_handler: Arc<ApiHandler<C, A>>,
+}
 
-    let routing = if let Some(bootstrap_address) = bootstrap {
-        info!("Connection to bootstrap peer {}", bootstrap_address);
-
-        let bootstrap = Bootstrap::new(config.listen_address, bootstrap_address, config.fingers);
-        bootstrap.bootstrap(config.timeout)?
-    } else {
-        info!("No bootstrapping peer provided, creating new network");
-
-        let finger_table = vec![config.listen_address; config.fingers];
-        Routing::new(
-            config.listen_address,
-            config.listen_address,
-            config.listen_address,
-            finger_table,
+impl<C, A> std::fmt::Debug for Peer<C, A>
+where
+    C: ConnectionTrait<Address = A>,
+    A: PeerAddr + Sync,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Peer {{ routing: {:?}, storage: {:?} }}",
+            self.routing, self.p2p_handler
         )
-    };
+    }
+}
 
-    let routing = Arc::new(Mutex::new(routing));
+impl<C, A> Peer<C, A>
+where
+    C: ConnectionTrait<Address = A>,
+    A: PeerAddr + Sync,
+{
+    pub fn create(config: Config<A>) -> Result<Self> {
+        let routing = {
+            let finger_table = vec![config.listen_address; config.fingers];
+            Routing::new(
+                config.listen_address,
+                config.listen_address,
+                config.listen_address,
+                finger_table,
+            )
+        };
 
-    let p2p_handler = P2PHandler::new(Arc::clone(&routing));
-    let p2p_server = Server::new(p2p_handler);
-    let p2p_handle = p2p_server.listen(config.listen_address, config.worker_threads)?;
+        let routing = Arc::new(Mutex::new(routing));
 
-    let api_handler = ApiHandler::new(Arc::clone(&routing), config.timeout);
-    let api_server = Server::new(api_handler);
-    let api_handle = api_server.listen(config.api_address, 1)?;
+        let p2p_handler = Arc::new(P2PHandler::new(Arc::clone(&routing)));
+        let api_handler = Arc::new(ApiHandler::new(Arc::clone(&routing), config.timeout));
 
-    let mut stabilization = Stabilization::new(Arc::clone(&routing), config.timeout);
-    let stabilization_handle = thread::spawn(move || loop {
-        if let Err(err) = stabilization.stabilize() {
-            error!("Error during stabilization:\n\n{:?}", err);
+        Ok(Peer {
+            config,
+            p2p_handler,
+            api_handler,
+            routing,
+        })
+    }
+
+    pub fn run(&self, bootstrap: Option<A>) -> Result<()> {
+        info!("Distributed Hash Table based on CHORD");
+        info!("-------------------------------------\n");
+        debug!(
+            "The current configuration is as follows.\n\n{:#?}\n",
+            self.config
+        );
+
+        let config = self.config;
+
+        if let Some(bootstrap_address) = bootstrap {
+            info!("Connection to bootstrap peer {}", bootstrap_address);
+
+            let mut routing = self.routing.lock().unwrap();
+            let bootstrap: Bootstrap<C, A> =
+                Bootstrap::new(config.listen_address, bootstrap_address, config.fingers);
+            *routing = bootstrap.bootstrap(config.timeout)?
         }
 
-        thread::sleep(Duration::from_secs(config.stabilization_interval));
-    });
+        let p2p_server = Server::from_arc(&self.p2p_handler);
+        //let p2p_server = Server::new(Arc::clone(&self.p2p_handler));
+        let p2p_handle = p2p_server.listen::<A, C>(config.listen_address, config.worker_threads)?;
 
-    if let Err(err) = p2p_handle.join() {
-        error!("Error joining p2p handler:\n\n{:?}", err);
+        let api_server: Server<ApiHandler<C, A>> = Server::from_arc(&self.api_handler);
+        let api_handle = api_server.listen(config.api_address, 1)?;
+
+        let mut stabilization: Stabilization<C, A> =
+            Stabilization::new(Arc::clone(&self.routing), config.timeout);
+        let stabilization_handle = thread::spawn(move || loop {
+            if let Err(err) = stabilization.stabilize() {
+                error!("Error during stabilization:\n\n{:?}", err);
+            }
+
+            thread::sleep(Duration::from_secs(config.stabilization_interval));
+        });
+
+        if let Err(err) = p2p_handle.join() {
+            error!("Error joining p2p handler:\n\n{:?}", err);
+        }
+
+        if let Err(err) = api_handle.join() {
+            error!("Error joining api handler:\n\n{:?}", err);
+        }
+
+        if let Err(err) = stabilization_handle.join() {
+            error!("Error joining stabilization:\n\n{:?}", err);
+        }
+
+        Ok(())
     }
 
-    if let Err(err) = api_handle.join() {
-        error!("Error joining api handler:\n\n{:?}", err);
+    pub fn preds_consistent(peers: Vec<Arc<Self>>) -> bool {
+        let peers: Vec<Routing<A>> = peers.iter().map(|x| x.routing.lock().unwrap().clone()).collect();
+        Routing::preds_consistent(peers)
     }
+}
 
-    if let Err(err) = stabilization_handle.join() {
-        error!("Error joining stabilization:\n\n{:?}", err);
+impl<C: ConnectionTrait<Address = A>, A: PeerAddr + Display + Sync> Display for Peer<C, A> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let routing = self.routing.lock().unwrap();
+        let addr = *routing.current;
+        let pred = *routing.predecessor;
+        let succ = *routing.successor;
+        let fingers: Vec<A> = routing.finger_table.clone().into_iter().map(|x| *x).collect();
+        write!(f,
+               "Peer {:?}\n\
+               Predecessor: {:?}\n\
+               Successor: {:?}\n\
+               Fingers: {:?}\n",
+               addr, pred, succ, fingers)
     }
-
-    Ok(())
 }

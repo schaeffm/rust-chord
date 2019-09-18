@@ -5,6 +5,8 @@ extern crate stderrlog;
 extern crate structopt;
 
 use dht::config::Config;
+use dht::network::Connection;
+use dht::Peer;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::process;
@@ -57,7 +59,8 @@ fn main() {
 
     // TODO init logger with verbosity flag
 
-    if let Err(e) = dht::run(config, opt.bootstrap) {
+    let peer = Peer::<Connection, SocketAddr>::create(config);
+    if let Err(e) = peer.unwrap().run(opt.bootstrap) {
         error!("Application error: {}", e);
         process::exit(1);
     }

@@ -1,28 +1,32 @@
 use crate::error::MessageError;
 use crate::message::api::*;
 use crate::message::Message;
-use crate::network::{Connection, ServerHandler};
+use crate::network::ConnectionTrait;
+use crate::network::{Connection, PeerAddr, ServerHandler};
 use crate::procedures::Procedures;
 use crate::routing::identifier::{Identifier, Identify};
 use crate::routing::Routing;
 use crate::storage::Key;
 use std::error::Error;
 use std::io;
-use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::u8;
 
 /// Handler for api requests
 ///
 /// The supported incoming api messages are `DHT GET` and `DHT PUT`.
-pub struct ApiHandler {
-    routing: Arc<Mutex<Routing<SocketAddr>>>,
-    procedures: Procedures,
+pub struct ApiHandler<C, A>
+where
+    C: ConnectionTrait<Address = A>,
+    A: PeerAddr,
+{
+    routing: Arc<Mutex<Routing<A>>>,
+    procedures: Procedures<C, A>,
 }
 
-impl ApiHandler {
+impl<A: PeerAddr, C: ConnectionTrait<Address = A>> ApiHandler<C, A> {
     /// Creates a new `ApiHandler` instance.
-    pub fn new(routing: Arc<Mutex<Routing<SocketAddr>>>, timeout: u64) -> Self {
+    pub fn new(routing: Arc<Mutex<Routing<A>>>, timeout: u64) -> Self {
         let procedures = Procedures::new(timeout);
 
         Self {
@@ -31,19 +35,19 @@ impl ApiHandler {
         }
     }
 
-    fn closest_peer(&self, identifier: Identifier) -> SocketAddr {
+    fn closest_peer(&self, identifier: Identifier) -> A {
         let routing = self.routing.lock().unwrap();
 
         **routing.closest_peer(identifier)
     }
 
-    fn find_peer(&self, identifier: Identifier) -> crate::Result<SocketAddr> {
+    fn find_peer(&self, identifier: Identifier) -> crate::Result<A> {
         let closest_peer = self.closest_peer(identifier);
 
         self.procedures.find_peer(identifier, closest_peer)
     }
 
-    fn handle_dht_get(&self, mut api_con: Connection, dht_get: DhtGet) -> crate::Result<()> {
+    fn handle_dht_get(&self, mut api_con: C, dht_get: DhtGet) -> crate::Result<()> {
         // iterate through all replication indices
         for i in 0..u8::MAX {
             let key = Key {
@@ -58,7 +62,7 @@ impl ApiHandler {
                     key: dht_get.key,
                     value,
                 };
-                api_con.send(&Message::DhtSuccess(dht_success))?;
+                api_con.send(Message::DhtSuccess(dht_success))?;
 
                 return Ok(());
             }
@@ -66,12 +70,12 @@ impl ApiHandler {
 
         // send failure if no value was found throughout the iteration
         let dht_failure = DhtFailure { key: dht_get.key };
-        api_con.send(&Message::DhtFailure(dht_failure))?;
+        api_con.send(Message::DhtFailure(dht_failure))?;
 
         Ok(())
     }
 
-    fn handle_dht_put(&self, _con: Connection, dht_put: DhtPut) -> crate::Result<()> {
+    fn handle_dht_put(&self, _con: C, dht_put: DhtPut) -> crate::Result<()> {
         // iterate through all replication indices
         for i in 0..=dht_put.replication {
             let key = Key {
@@ -88,7 +92,7 @@ impl ApiHandler {
         Ok(())
     }
 
-    fn handle_connection(&self, mut con: Connection) -> crate::Result<()> {
+    fn handle_connection(&self, mut con: C) -> crate::Result<()> {
         let msg = con.receive()?;
 
         info!("Api handler received message of type {}", msg);
@@ -105,8 +109,8 @@ impl ApiHandler {
     }
 }
 
-impl ServerHandler for ApiHandler {
-    fn handle_connection(&self, connection: Connection) {
+impl<C: ConnectionTrait<Address = A>, A: PeerAddr> ServerHandler<C> for ApiHandler<C, A> {
+    fn handle_connection(&self, connection: C) {
         if let Err(err) = self.handle_connection(connection) {
             self.handle_error(&*err);
         }

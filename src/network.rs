@@ -8,6 +8,8 @@
 //! [`Message`]: ../message/enum.Message.html
 
 use crate::message::Message;
+use crate::routing::identifier::Identify;
+use crate::Result;
 use std::io;
 use std::io::prelude::*;
 use std::io::Cursor;
@@ -32,6 +34,106 @@ const MAX_MESSAGE_SIZE: usize = 64000;
 /// let msg = con.receive().expect("could not receive message");
 /// con.send(&msg).expect("could not send message");
 /// ```
+pub trait PeerAddr:
+    Clone + Copy + std::fmt::Display + std::fmt::Debug + std::cmp::PartialEq + Send + Identify + 'static
+{
+}
+impl<T> PeerAddr for T where
+    T: Clone
+        + Copy
+        + std::fmt::Display
+        + std::fmt::Debug
+        + std::cmp::PartialEq
+        + Send
+        + Identify
+        + 'static
+{
+}
+pub trait ConnectionTrait
+where
+    Self: Sized + Send + 'static,
+{
+    type Address: PeerAddr;
+    type Listener: Send;
+    fn open(addr: Self::Address, timeout_ms: u64) -> Result<Self>;
+    fn receive(&mut self) -> Result<Message<Self::Address>>;
+    fn send(&mut self, msg: Message<Self::Address>) -> Result<()>;
+    //fn peer_addr(&self) -> Result<Self::Address>;
+    //fn local_addr(&self) -> Result<Self::Address>;
+    fn shutdown(self) -> Result<()>;
+    fn bind(addr: Self::Address) -> Result<Self::Listener>;
+    fn listen<'a>(listener: &'a Self::Listener) -> Box<'a + Iterator<Item = Self>>;
+}
+
+impl ConnectionTrait for Connection {
+    type Address = SocketAddr;
+    type Listener = TcpListener;
+    fn open(addr: SocketAddr, timeout_ms: u64) -> Result<Self> {
+        let stream = TcpStream::connect(addr)?;
+
+        trace!("Connection to {} - Opened", stream.peer_addr()?);
+
+        let timeout = Duration::from_millis(timeout_ms);
+        stream.set_read_timeout(Some(timeout))?;
+        stream.set_write_timeout(Some(timeout))?;
+
+        Ok(Self::from_stream(stream))
+    }
+
+    fn receive(&mut self) -> Result<Message<Self::Address>> {
+        // read bytes from tcp stream
+        let size = self.stream.read(self.buffer.as_mut())?;
+
+        // create cursor to parse message
+        let msg = Message::parse(Cursor::new(&self.buffer[..size]))?;
+
+        // output debug information
+        trace!(
+            "Connection to {} - Received message of type {}",
+            self.stream.peer_addr()?,
+            msg
+        );
+
+        Ok(msg)
+    }
+
+    fn send(&mut self, msg: Message<Self::Address>) -> Result<()> {
+        // create cursor to write message
+        let size = msg.write_to(Cursor::new(self.buffer.as_mut()))?;
+
+        // output debug information
+        trace!(
+            "Connection to {} - Sent message of type {}",
+            self.stream.peer_addr()?,
+            msg
+        );
+
+        // write bytes to tcp stream
+        Ok(self.stream.write_all(&self.buffer[..size])?)
+    }
+
+    //fn peer_addr(&self) -> Result<SocketAddr> {
+    //    Ok(self.stream.peer_addr()?)
+    //}
+
+    fn shutdown(self) -> Result<()> {
+        Ok(self.stream.shutdown(Shutdown::Both)?)
+    }
+
+    fn listen<'a>(listener: &'a Self::Listener) -> Box<'a + Iterator<Item = Self>> {
+        Box::new(
+            listener
+                .incoming()
+                .filter_map(std::result::Result::ok)
+                .map(Connection::from_stream),
+        )
+    }
+
+    fn bind(addr: Self::Address) -> Result<Self::Listener> {
+        Ok(TcpListener::bind(addr)?)
+    }
+}
+
 pub struct Connection {
     stream: TcpStream,
     buffer: [u8; MAX_MESSAGE_SIZE],
@@ -75,7 +177,7 @@ impl Connection {
     /// Receives a message from the remote peer.
     ///
     /// This operation is blocking until a message has been received.
-    pub fn receive(&mut self) -> io::Result<Message> {
+    pub fn receive(&mut self) -> io::Result<Message<SocketAddr>> {
         // read bytes from tcp stream
         let size = self.stream.read(self.buffer.as_mut())?;
 
@@ -95,7 +197,7 @@ impl Connection {
     /// Sends a message to the remote peer.
     ///
     /// This operation is blocking until the message has been sent.
-    pub fn send(&mut self, msg: &Message) -> io::Result<()> {
+    pub fn send(&mut self, msg: &Message<SocketAddr>) -> io::Result<()> {
         // create cursor to write message
         let size = msg.write_to(Cursor::new(self.buffer.as_mut()))?;
 
@@ -149,44 +251,44 @@ impl Connection {
 /// [`Server`]: struct.Server.html
 /// [`handle_connection`]: #tymethod.handle_connection
 /// [`handle_error`]: #tymethod.handle_error
-pub trait ServerHandler {
+pub trait ServerHandler<C> {
     /// A connection has been established with some remote peer.
     ///
     /// The handler can exchange messages with the peer via the given
     /// `connection` object.
-    fn handle_connection(&self, connection: Connection);
+    fn handle_connection(&self, connection: C);
 
     /// The incoming request was unsuccessful and an error was raised.
     ///
     /// The given `error` should be handled appropiately.
     fn handle_error(&self, error: io::Error);
 
-    /// Handles an incomming connection.
-    ///
-    /// Depending on the `result` this either calls [`handle_error`] or
-    /// creates a new [`Connection`] from the given [`TcpStream`] and
-    /// calls [`handle_connection`].
-    ///
-    /// [`handle_error`]: #tymethod.handle_error
-    /// [`Connection`]: struct.Connection.html
-    /// [`TcpStream`]: ../../std/net/struct.TcpStream.html
-    /// [`handle_connection`]: #tymethod.handle_connection
-    fn handle_incoming(&self, result: io::Result<TcpStream>) {
-        match result {
-            Ok(stream) => {
-                trace!(
-                    "Handling incoming connection from {}",
-                    stream.peer_addr().unwrap()
-                );
+    //// Handles an incomming connection.
+    ////
+    //// Depending on the `result` this either calls [`handle_error`] or
+    //// creates a new [`Connection`] from the given [`TcpStream`] and
+    //// calls [`handle_connection`].
+    ////
+    //// [`handle_error`]: #tymethod.handle_error
+    //// [`Connection`]: struct.Connection.html
+    //// [`TcpStream`]: ../../std/net/struct.TcpStream.html
+    //// [`handle_connection`]: #tymethod.handle_connection
+    //fn handle_incoming(&self, result: io::Result<TcpStream>) {
+    //    match result {
+    //        Ok(stream) => {
+    //            trace!(
+    //                "Handling incoming connection from {}",
+    //                stream.peer_addr().unwrap()
+    //            );
 
-                // TODO handle timeouts
-                let connection = Connection::from_stream(stream);
+    //            // TODO handle timeouts
+    //            let connection = Connection::from_stream(stream);
 
-                self.handle_connection(connection)
-            }
-            Err(error) => self.handle_error(error),
-        }
-    }
+    //            self.handle_connection(connection)
+    //        }
+    //        Err(error) => self.handle_error(error),
+    //    }
+    //}
 }
 
 /// A multithreaded server waiting for connections
@@ -214,7 +316,7 @@ pub struct Server<T> {
     handler: Arc<T>,
 }
 
-impl<T: ServerHandler + Send + Sync + 'static> Server<T> {
+impl<T: Send + Sync + 'static> Server<T> {
     /// Creates a new server for the given handler.
     ///
     /// The [`ServerHandler`] must also implement [`Send`] and [`Sync`] to
@@ -229,26 +331,35 @@ impl<T: ServerHandler + Send + Sync + 'static> Server<T> {
         }
     }
 
+    pub fn from_arc(handler: &Arc<T>) -> Self {
+        Self {
+            handler: Arc::clone(handler),
+        }
+    }
+
     /// Listens on the given socket address.
     ///
     /// `num_workers` defines the number of worker threads which handle
     /// incoming requests in parallel.
-    pub fn listen<A: ToSocketAddrs>(
+    pub fn listen<A: PeerAddr, C: ConnectionTrait<Address = A>>(
         self,
         addr: A,
         num_workers: usize,
-    ) -> io::Result<thread::JoinHandle<()>> {
-        let listener = TcpListener::bind(addr)?;
+    ) -> Result<thread::JoinHandle<()>>
+    where
+        T: ServerHandler<C>,
+    {
+        let listener = C::bind(addr)?;
 
-        trace!("Server listening on address {}", listener.local_addr()?);
+        //trace!("Server listening on address {}", listener.local_addr()?);
 
         let handle = thread::spawn(move || {
             let pool = ThreadPool::new(num_workers);
 
-            for result in listener.incoming() {
+            for con in C::listen(&listener) {
                 let handler = Arc::clone(&self.handler);
                 pool.execute(move || {
-                    handler.handle_incoming(result);
+                    handler.handle_connection(con);
                 });
             }
         });

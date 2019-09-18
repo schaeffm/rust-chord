@@ -6,6 +6,7 @@
 //! [`MessageError`]: struct.MessageError.html
 
 use crate::message::Message;
+use crate::network::PeerAddr;
 use std::error::Error;
 use std::fmt;
 
@@ -18,11 +19,11 @@ use std::fmt;
 /// [`Message`]: message/enum.Message.html
 /// [`io::Error`]: ../std/io/struct.Error.html
 #[derive(Debug)]
-pub struct MessageError {
-    msg: Message,
+pub struct MessageError<A> {
+    msg: Message<A>,
 }
 
-impl MessageError {
+impl<A: PeerAddr> MessageError<A> {
     /// Creates a new message error from an existing message as well as an
     /// arbitrary error payload.
     ///
@@ -40,18 +41,18 @@ impl MessageError {
     ///     Err(MessageError::new(msg))
     /// };
     /// ```
-    pub fn new(msg: Message) -> Self {
+    pub fn new(msg: Message<A>) -> Self {
         MessageError { msg }
     }
 }
 
-impl fmt::Display for MessageError {
+impl<A: PeerAddr> fmt::Display for MessageError<A> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Unexpected message type {}", self.msg)
     }
 }
 
-impl Error for MessageError {
+impl<A: PeerAddr> Error for MessageError<A> {
     fn description(&self) -> &str {
         "Unexpected message type"
     }

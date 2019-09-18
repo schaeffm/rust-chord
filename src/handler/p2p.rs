@@ -1,14 +1,13 @@
 use crate::error::MessageError;
 use crate::message::p2p::*;
 use crate::message::Message;
-use crate::network::{Connection, ServerHandler};
+use crate::network::{ConnectionTrait, PeerAddr, ServerHandler};
 use crate::routing::identifier::{Identifier, Identify};
 use crate::routing::Routing;
 use crate::storage::Key;
 use std::collections::HashMap;
 use std::error::Error;
 use std::io;
-use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 
 type Storage = HashMap<Key, Vec<u8>>;
@@ -17,16 +16,16 @@ type Storage = HashMap<Key, Vec<u8>>;
 ///
 /// The supported incoming peer-to-peer messages are `STORAGE GET`,
 /// `STORAGE PUT`, `PEER FIND`, `PREDECESSOR GET` and `PREDECESSOR SET`.
-pub struct P2PHandler {
-    routing: Arc<Mutex<Routing<SocketAddr>>>,
+#[derive(Debug)]
+pub struct P2PHandler<A> {
+    routing: Arc<Mutex<Routing<A>>>,
     storage: Mutex<Storage>,
 }
 
-impl P2PHandler {
+impl<A: PeerAddr> P2PHandler<A> {
     /// Creates a new `P2PHandler` instance.
-    pub fn new(routing: Arc<Mutex<Routing<SocketAddr>>>) -> Self {
+    pub fn new(routing: Arc<Mutex<Routing<A>>>) -> Self {
         let storage = Mutex::new(Storage::new());
-
         Self { routing, storage }
     }
 
@@ -36,13 +35,13 @@ impl P2PHandler {
         routing.responsible_for(identifier)
     }
 
-    fn closest_peer(&self, identifier: Identifier) -> SocketAddr {
+    fn closest_peer(&self, identifier: Identifier) -> A {
         let routing = self.routing.lock().unwrap();
 
         **routing.closest_peer(identifier)
     }
 
-    fn notify_predecessor(&self, predecessor_addr: SocketAddr) -> SocketAddr {
+    fn notify_predecessor(&self, predecessor_addr: A) -> A {
         let mut routing = self.routing.lock().unwrap();
 
         let old_predecessor_addr = *routing.predecessor;
@@ -93,9 +92,9 @@ impl P2PHandler {
         true
     }
 
-    fn handle_storage_get(
+    fn handle_storage_get<C: ConnectionTrait<Address = A>>(
         &self,
-        mut con: Connection,
+        mut con: C,
         storage_get: StorageGet,
     ) -> crate::Result<()> {
         let raw_key = storage_get.raw_key;
@@ -130,15 +129,15 @@ impl P2PHandler {
             };
 
             // 3. reply with STORAGE GET SUCCESS or STORAGE FAILURE
-            con.send(&msg)?
+            con.send(msg)?
         }
 
         Ok(())
     }
 
-    fn handle_storage_put(
+    fn handle_storage_put<C: ConnectionTrait<Address = A>>(
         &self,
-        mut con: Connection,
+        mut con: C,
         storage_put: StoragePut,
     ) -> crate::Result<()> {
         let raw_key = storage_put.raw_key;
@@ -171,13 +170,16 @@ impl P2PHandler {
             };
 
             // 3. reply with STORAGE PUT SUCCESS or STORAGE FAILURE
-            con.send(&msg)?;
+            con.send(msg)?;
         }
 
         Ok(())
     }
 
-    fn handle_peer_find(&self, mut con: Connection, peer_find: PeerFind) -> crate::Result<()> {
+    fn handle_peer_find<C>(&self, mut con: C, peer_find: PeerFind) -> crate::Result<()>
+    where
+        C: ConnectionTrait<Address = A>,
+    {
         let identifier = peer_find.identifier;
 
         info!("Received PEER FIND request for identifier {}", identifier);
@@ -192,16 +194,19 @@ impl P2PHandler {
             identifier,
             socket_addr,
         };
-        con.send(&Message::PeerFound(peer_found))?;
+        con.send(Message::PeerFound(peer_found))?;
 
         Ok(())
     }
 
-    fn handle_predecessor_notify(
+    fn handle_predecessor_notify<C>(
         &self,
-        mut con: Connection,
-        predecessor_notify: PredecessorNotify,
-    ) -> crate::Result<()> {
+        mut con: C,
+        predecessor_notify: PredecessorNotify<A>,
+    ) -> crate::Result<()>
+    where
+        C: ConnectionTrait<Address = A>,
+    {
         let predecessor_addr = predecessor_notify.socket_addr;
 
         info!("Received PREDECESSOR GET request from {}", predecessor_addr);
@@ -215,12 +220,15 @@ impl P2PHandler {
 
         // 3. return the current predecessor with PREDECESSOR REPLY
         let predecessor_reply = PredecessorReply { socket_addr };
-        con.send(&Message::PredecessorReply(predecessor_reply))?;
+        con.send(Message::PredecessorReply(predecessor_reply))?;
 
         Ok(())
     }
 
-    fn handle_connection(&self, mut con: Connection) -> crate::Result<()> {
+    fn handle_connection<C>(&self, mut con: C) -> crate::Result<()>
+    where
+        C: ConnectionTrait<Address = A>,
+    {
         let msg = con.receive()?;
 
         info!("P2P handler received message of type {}", msg);
@@ -241,9 +249,13 @@ impl P2PHandler {
     }
 }
 
-impl ServerHandler for P2PHandler {
-    fn handle_connection(&self, connection: Connection) {
-        if let Err(err) = self.handle_connection(connection) {
+impl<A, C> ServerHandler<C> for P2PHandler<A>
+where
+    C: ConnectionTrait<Address = A>,
+    A: PeerAddr,
+{
+    fn handle_connection(&self, connection: C) {
+        if let Err(err) = P2PHandler::handle_connection(&self, connection) {
             self.handle_error(&*err);
         }
     }

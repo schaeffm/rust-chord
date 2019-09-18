@@ -23,7 +23,7 @@ use std::ops::Deref;
 use std::ops::{Add, Sub};
 
 /// A 256 bit identifier on an identifier circle
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Identifier(U256);
 
 impl Identifier {

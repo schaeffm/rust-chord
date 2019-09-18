@@ -5,29 +5,37 @@
 //!
 //! [`Stabilization`]: struct.Stabilization.html
 
+use crate::network::ConnectionTrait;
+use crate::network::PeerAddr;
 use crate::procedures::Procedures;
 use crate::routing::identifier::*;
 use crate::routing::Routing;
-use std::net::SocketAddr;
+use std::marker::PhantomData;
 use std::sync::Arc;
 use std::sync::Mutex;
 
 /// Basic information needed to connect to the network using a bootstrap peer
-pub struct Bootstrap {
-    current_addr: SocketAddr,
-    boot_addr: SocketAddr,
+pub struct Bootstrap<C, A>
+where
+    C: ConnectionTrait<Address = A>,
+    A: PeerAddr,
+{
+    current_addr: A,
+    boot_addr: A,
     fingers: usize,
+    p: PhantomData<C>,
 }
 
-impl Bootstrap {
+impl<A: PeerAddr, C: ConnectionTrait<Address = A>> Bootstrap<C, A> {
     /// Initializes the bootstrap algorithm by providing the peer's own address,
     /// the address of a bootstrapping peer and the number of fingers that
     /// should be stored.
-    pub fn new(current_addr: SocketAddr, boot_addr: SocketAddr, fingers: usize) -> Self {
+    pub fn new(current_addr: A, boot_addr: A, fingers: usize) -> Self {
         Self {
             current_addr,
             boot_addr,
             fingers,
+            p: PhantomData,
         }
     }
 
@@ -37,8 +45,8 @@ impl Bootstrap {
     /// will become our successor. After that we obtain the current predecessor of that peer
     /// and set it as our predecessor which also updates the predecessor information of the
     /// successor peer. Finally, we initialize the finger table with our own address.
-    pub fn bootstrap(&self, timeout: u64) -> crate::Result<Routing<SocketAddr>> {
-        let procedures = Procedures::new(timeout);
+    pub fn bootstrap(&self, timeout: u64) -> crate::Result<Routing<A>> {
+        let procedures: Procedures<C, A> = Procedures::new(timeout);
         let current_id = self.current_addr.identifier();
 
         let successor = procedures.find_peer(current_id, self.boot_addr)?;
@@ -57,14 +65,18 @@ impl Bootstrap {
 /// Stabilize the [`Routing`] table in regular intervals
 ///
 /// [`Routing`]: ../routing/struct.Routing.html
-pub struct Stabilization {
-    procedures: Procedures,
-    routing: Arc<Mutex<Routing<SocketAddr>>>,
+pub struct Stabilization<C, A>
+where
+    C: ConnectionTrait<Address = A>,
+    A: PeerAddr,
+{
+    procedures: Procedures<C, A>,
+    routing: Arc<Mutex<Routing<A>>>,
 }
 
-impl Stabilization {
+impl<C: ConnectionTrait<Address = A>, A: PeerAddr> Stabilization<C, A> {
     /// Initializes the stabilization struct with a routing object and the connection timeout.
-    pub fn new(routing: Arc<Mutex<Routing<SocketAddr>>>, timeout: u64) -> Self {
+    pub fn new(routing: Arc<Mutex<Routing<A>>>, timeout: u64) -> Self {
         let procedures = Procedures::new(timeout);
 
         Self {
