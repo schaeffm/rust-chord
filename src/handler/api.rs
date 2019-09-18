@@ -2,7 +2,7 @@ use crate::error::MessageError;
 use crate::message::api::*;
 use crate::message::Message;
 use crate::network::ConnectionTrait;
-use crate::network::{Connection, PeerAddr, ServerHandler};
+use crate::network::{PeerAddr, ServerHandler};
 use crate::procedures::Procedures;
 use crate::routing::identifier::{Identifier, Identify};
 use crate::routing::Routing;

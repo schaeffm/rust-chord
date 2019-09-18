@@ -32,7 +32,8 @@ impl<A: PeerAddr> MessageError<A> {
     /// ```
     /// # use dht::error::MessageError;
     /// # use dht::message::{Message, p2p};
-    /// # let socket_addr = "127.0.0.1:8080".parse().unwrap();
+    /// use std::net::SocketAddr;
+    /// # let socket_addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
     /// # let msg = Message::PredecessorNotify(p2p::PredecessorNotify { socket_addr });
     /// #
     /// let result = if let Message::DhtSuccess(_) = msg {

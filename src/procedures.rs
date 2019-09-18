@@ -31,11 +31,11 @@ impl<C: ConnectionTrait<Address = A>, A: PeerAddr> Procedures<C, A> {
     ///
     /// This iteratively sends PEER FIND messages to successive peers,
     /// beginning with `peer_addr` which could be taken from a finger table.
-    pub fn find_peer(&self, identifier: Identifier, mut peer_addr: A) -> crate::Result<A> {
+    pub fn find_peer(&self, identifier: Identifier, peer_addr: A) -> crate::Result<A> {
         debug!("Finding peer for identifier {}", identifier);
 
         // TODO use successors from list if PeerNotFound
-        loop {
+        //loop {
             let mut con = C::open(peer_addr, self.timeout)?;
             let peer_find = PeerFind { identifier };
             con.send(Message::PeerFind(peer_find))?;

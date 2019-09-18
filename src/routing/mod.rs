@@ -17,7 +17,6 @@
 //! [`Routing`]: struct.Routing.html
 
 use self::identifier::*;
-use crate::Result;
 
 pub mod identifier;
 
@@ -91,6 +90,8 @@ impl<T: Identify + Copy + Clone> Routing<T> {
     }
 
     pub fn preds_consistent(mut peers: Vec<Self>) -> bool {
+
+        /*
         let len = peers.len();
         peers.sort_by(|a, b| a.current.identifier().cmp(&b.current.identifier()));
         // rotate ids by one
@@ -98,6 +99,10 @@ impl<T: Identify + Copy + Clone> Routing<T> {
         let preds = peers.iter().map(|x| x.predecessor.identifier());
 
         ids.eq(preds)
+        */
+
+        false
+    }
 }
 
 /// Returns the finger table entry number for the closest predecessor.

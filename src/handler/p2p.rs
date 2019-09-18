@@ -2,7 +2,7 @@ use crate::error::MessageError;
 use crate::message::p2p::*;
 use crate::message::Message;
 use crate::network::{ConnectionTrait, PeerAddr, ServerHandler};
-use crate::routing::identifier::{Identifier, Identify};
+use crate::routing::identifier::Identifier;
 use crate::routing::Routing;
 use crate::storage::Key;
 use std::collections::HashMap;
@@ -135,7 +135,7 @@ impl<A: PeerAddr> P2PHandler<A> {
             };
 
             // 3. reply with STORAGE GET SUCCESS or STORAGE FAILURE
-            con.send(msg)?
+            con.send(msg)?;
         //}
 
         Ok(())
@@ -187,7 +187,7 @@ impl<A: PeerAddr> P2PHandler<A> {
     where
         C: ConnectionTrait<Address = A>,
     {
-        let routing = self.routing.lock()?;
+        let routing = self.routing.lock().unwrap();
         let identifier = peer_find.identifier;
 
         info!("Received PEER FIND request for identifier {}", identifier);
@@ -207,7 +207,7 @@ impl<A: PeerAddr> P2PHandler<A> {
             // get closest preceding peer to send a PeerFind request
             let peer_addr = self.closest_preceding_peer(identifier);
 
-            let mut new_con = Connection::open(peer_addr, 3600)?;
+            let mut new_con = C::open(peer_addr, 3600)?;
             let peer_find = PeerFind { identifier };
             new_con.send(Message::PeerFind(peer_find))?;
             let msg = new_con.receive()?;
