@@ -3,36 +3,42 @@
 use crate::error::MessageError;
 use crate::message::p2p::{PeerFind, PredecessorNotify, StorageGet, StoragePut};
 use crate::message::Message;
-use crate::network::Connection;
+use crate::network::ConnectionTrait;
+use crate::network::PeerAddr;
 use crate::routing::identifier::Identifier;
 use crate::storage::Key;
-use std::net::SocketAddr;
+use std::marker::PhantomData;
+use std::sync::Mutex;
 
-pub struct Procedures {
+pub struct Procedures<C, A>
+where
+    C: ConnectionTrait<Address = A>,
+    A: PeerAddr,
+{
     timeout: u64,
+    p: PhantomData<Mutex<C>>,
 }
 
-impl Procedures {
+impl<C: ConnectionTrait<Address = A>, A: PeerAddr> Procedures<C, A> {
     pub fn new(timeout: u64) -> Self {
-        Self { timeout }
+        Self {
+            timeout,
+            p: PhantomData,
+        }
     }
 
     /// Get the socket address of the peer responsible for a given identifier.
     ///
     /// This iteratively sends PEER FIND messages to successive peers,
     /// beginning with `peer_addr` which could be taken from a finger table.
-    pub fn find_peer(
-        &self,
-        identifier: Identifier,
-        mut peer_addr: SocketAddr,
-    ) -> crate::Result<SocketAddr> {
+    pub fn find_peer(&self, identifier: Identifier, mut peer_addr: A) -> crate::Result<A> {
         debug!("Finding peer for identifier {}", identifier);
 
         // TODO do not fail if one peer does not reply correctly
         loop {
-            let mut con = Connection::open(peer_addr, self.timeout)?;
+            let mut con = C::open(peer_addr, self.timeout)?;
             let peer_find = PeerFind { identifier };
-            con.send(&Message::PeerFind(peer_find))?;
+            con.send(Message::PeerFind(peer_find))?;
             let msg = con.receive()?;
 
             let reply_addr = if let Message::PeerFound(peer_found) = msg {
@@ -58,7 +64,7 @@ impl Procedures {
     ///
     /// Opens a P2P connection to `peer_addr` and sends a STORAGE GET message to retrieve a value for
     /// `key` depending on the reply.
-    pub fn get_value(&self, peer_addr: SocketAddr, key: Key) -> crate::Result<Option<Vec<u8>>> {
+    pub fn get_value(&self, peer_addr: A, key: Key) -> crate::Result<Option<Vec<u8>>> {
         debug!("Get value for key {} from peer {}", key, peer_addr);
 
         let storage_get = StorageGet {
@@ -66,8 +72,8 @@ impl Procedures {
             raw_key: key.raw_key,
         };
 
-        let mut p2p_con = Connection::open(peer_addr, 3600)?;
-        p2p_con.send(&Message::StorageGet(storage_get))?;
+        let mut p2p_con = C::open(peer_addr, 3600)?;
+        p2p_con.send(Message::StorageGet(storage_get))?;
 
         let msg = p2p_con.receive()?;
 
@@ -88,13 +94,7 @@ impl Procedures {
     /// Put a value for a given key into the distributed hash table.
     ///
     /// Opens a P2P connection to `peer_addr` and sends a STORAGE PUT message to store `value` under `key`.
-    pub fn put_value(
-        &self,
-        peer_addr: SocketAddr,
-        key: Key,
-        ttl: u16,
-        value: Vec<u8>,
-    ) -> crate::Result<()> {
+    pub fn put_value(&self, peer_addr: A, key: Key, ttl: u16, value: Vec<u8>) -> crate::Result<()> {
         debug!("Put value for key {} to peer {}", key, peer_addr);
 
         let storage_put = StoragePut {
@@ -104,14 +104,15 @@ impl Procedures {
             value,
         };
 
-        let mut p2p_con = Connection::open(peer_addr, 3600)?;
-        p2p_con.send(&Message::StoragePut(storage_put))?;
+        let mut p2p_con = C::open(peer_addr, 3600)?;
+        p2p_con.send(Message::StoragePut(storage_put))?;
 
         let msg = p2p_con.receive()?;
 
         if let Message::StoragePutSuccess(_) = msg {
             info!(
-                "Value for key {} successfully stored at peer {}",
+                "Value for key {} succe
+        let peers: Vec<&Routing<A>> = peers.iter().collect();ssfully stored at peer {}",
                 key, peer_addr
             );
 
@@ -134,16 +135,12 @@ impl Procedures {
     ///
     /// Opens a P2P connection and sends a PREDECESSOR NOTIFY message to `peer_addr` to receive a
     /// reply with the socket addres of `socket_addr`.
-    pub fn notify_predecessor(
-        &self,
-        socket_addr: SocketAddr,
-        peer_addr: SocketAddr,
-    ) -> crate::Result<SocketAddr> {
+    pub fn notify_predecessor(&self, socket_addr: A, peer_addr: A) -> crate::Result<A> {
         debug!("Getting predecessor of peer {}", peer_addr);
 
-        let mut con = Connection::open(peer_addr, self.timeout)?;
+        let mut con = C::open(peer_addr, self.timeout)?;
 
-        con.send(&Message::PredecessorNotify(PredecessorNotify {
+        con.send(Message::PredecessorNotify(PredecessorNotify {
             socket_addr,
         }))?;
 

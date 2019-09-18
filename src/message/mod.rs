@@ -9,10 +9,12 @@
 
 use self::api::*;
 use self::p2p::*;
+use crate::network::PeerAddr;
 use byteorder::{NetworkEndian, ReadBytesExt, WriteBytesExt};
 use std::fmt;
 use std::io;
 use std::io::prelude::*;
+use std::net::SocketAddr;
 
 pub mod api;
 pub mod p2p;
@@ -46,7 +48,7 @@ pub mod p2p;
 /// * [`PredecessorReply`](#variant.PredecessorReply)
 /// * [`PredecessorSet`](#variant.PredecessorSet)
 #[derive(Debug, PartialEq)]
-pub enum Message {
+pub enum Message<A> {
     /// The given key-value pair should be stored in the network.
     DhtPut(DhtPut),
     /// Search for a given key and provide the value if a value for the
@@ -71,15 +73,15 @@ pub enum Message {
     /// Initiates a lookup for a node responsible for the given identifier.
     PeerFind(PeerFind),
     /// A peer close to the given identifier has been found.
-    PeerFound(PeerFound),
+    PeerFound(PeerFound<A>),
     /// Notify some peer about a potentially new predecessor while requesting
     /// its old predecessor.
-    PredecessorNotify(PredecessorNotify),
+    PredecessorNotify(PredecessorNotify<A>),
     /// Reply to `PREDECESSOR GET` with the predecessor's address.
-    PredecessorReply(PredecessorReply),
+    PredecessorReply(PredecessorReply<A>),
 }
 
-impl Message {
+impl Message<SocketAddr> {
     const DHT_PUT: u16 = 650;
     const DHT_GET: u16 = 651;
     const DHT_SUCCESS: u16 = 652;
@@ -205,7 +207,10 @@ impl Message {
     }
 }
 
-impl fmt::Display for Message {
+impl<A> fmt::Display for Message<A>
+where
+    A: PeerAddr,
+{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let name = match self {
             Message::DhtPut(_) => "DHT PUT",

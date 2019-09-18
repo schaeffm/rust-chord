@@ -81,17 +81,17 @@ pub struct PeerFind {
 ///
 /// [`PeerFind`]: struct.PeerFind.html
 #[derive(Debug, PartialEq)]
-pub struct PeerFound {
+pub struct PeerFound<A> {
     pub identifier: Identifier,
-    pub socket_addr: SocketAddr,
+    pub socket_addr: A,
 }
 
 /// This message allows to notify some other peer of a potentially new predecessor.
 ///
 /// The receiving peer may use the given address to update its predecessor afterwards if applicable.
 #[derive(Debug, PartialEq)]
-pub struct PredecessorNotify {
-    pub socket_addr: SocketAddr,
+pub struct PredecessorNotify<A> {
+    pub socket_addr: A,
 }
 
 /// When a peer receives a [`PredecessorGet`] message, it is expected to reply
@@ -99,8 +99,8 @@ pub struct PredecessorNotify {
 ///
 /// [`PredecessorGet`]: struct.PredecessorGet.html
 #[derive(Debug, PartialEq)]
-pub struct PredecessorReply {
-    pub socket_addr: SocketAddr,
+pub struct PredecessorReply<A> {
+    pub socket_addr: A,
 }
 
 impl MessagePayload for StorageGet {
@@ -236,7 +236,7 @@ impl MessagePayload for PeerFind {
     }
 }
 
-impl MessagePayload for PeerFound {
+impl MessagePayload for PeerFound<SocketAddr> {
     fn parse(reader: &mut dyn Read) -> io::Result<Self> {
         let mut id_arr = [0; 32];
         reader.read_exact(&mut id_arr)?;
@@ -277,7 +277,7 @@ impl MessagePayload for PeerFound {
     }
 }
 
-impl MessagePayload for PredecessorNotify {
+impl MessagePayload for PredecessorNotify<SocketAddr> {
     fn parse(reader: &mut dyn Read) -> io::Result<Self> {
         let mut ip_arr = [0; 16];
         reader.read_exact(&mut ip_arr)?;
@@ -309,7 +309,7 @@ impl MessagePayload for PredecessorNotify {
     }
 }
 
-impl MessagePayload for PredecessorReply {
+impl MessagePayload for PredecessorReply<SocketAddr> {
     fn parse(reader: &mut dyn Read) -> io::Result<Self> {
         let mut ip_arr = [0; 16];
         reader.read_exact(&mut ip_arr)?;

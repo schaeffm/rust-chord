@@ -5,8 +5,11 @@ use dht::config::Config;
 use dht::message::api::{DhtGet, DhtPut};
 use dht::message::Message;
 use dht::network::Connection;
+use dht::network::ConnectionTrait;
+use dht::network::PeerAddr;
 use std::io;
 use std::io::prelude::*;
+use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::process;
 use structopt::StructOpt;
@@ -27,7 +30,7 @@ struct Opt {
 fn main() {
     let opt = Opt::from_args();
 
-    let config = Config::load_from_file(opt.config).unwrap_or_else(|err| {
+    let config: Config<SocketAddr> = Config::load_from_file(opt.config).unwrap_or_else(|err| {
         eprintln!("Argument error: {}", err);
         process::exit(2);
     });
@@ -41,9 +44,9 @@ fn main() {
         let command = read_line("Enter a command").unwrap();
 
         if "put" == command {
-            handle_put(config);
+            handle_put::<Connection, SocketAddr>(config);
         } else if "get" == command {
-            handle_get(config);
+            handle_get::<Connection, SocketAddr>(config);
         } else if "quit" == command {
             break;
         } else {
@@ -79,7 +82,7 @@ fn handle_help() {
     );
 }
 
-fn handle_put(config: Config) {
+fn handle_put<C: ConnectionTrait<Address = A>, A: PeerAddr>(config: Config<A>) {
     let key = read_line("Enter a key").unwrap();
     let value = read_line("Enter a value").unwrap();
 
@@ -95,13 +98,13 @@ fn handle_put(config: Config) {
         value: value.as_bytes().to_vec(),
     };
 
-    let mut con = Connection::open(config.api_address, config.timeout).unwrap();
-    con.send(&Message::DhtPut(dht_put)).unwrap();
+    let mut con = C::open(config.api_address, config.timeout).unwrap();
+    con.send(Message::DhtPut(dht_put)).unwrap();
 
     println!("Sent a DHT PUT message to {}", config.api_address);
 }
 
-fn handle_get(config: Config) {
+fn handle_get<C: ConnectionTrait<Address = A>, A: PeerAddr>(config: Config<A>) {
     let key = read_line("Enter a key").unwrap();
 
     let len = std::cmp::min(32, key.len());
@@ -111,8 +114,8 @@ fn handle_get(config: Config) {
 
     let dht_get = DhtGet { key: raw_key };
 
-    let mut con = Connection::open(config.api_address, config.timeout).unwrap();
-    con.send(&Message::DhtGet(dht_get)).unwrap();
+    let mut con = C::open(config.api_address, config.timeout).unwrap();
+    con.send(Message::DhtGet(dht_get)).unwrap();
 
     match con.receive().unwrap() {
         Message::DhtSuccess(dht_success) => {
