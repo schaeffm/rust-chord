@@ -28,7 +28,7 @@ pub struct Routing<T> {
     // TODO should maybe be an Option
     pub predecessor: Option<IdentifierValue<T>>,
     // TODO use BinaryHeap for multiple successors
-    pub successor: IdentifierValue<T>,
+    pub successor: Vec<IdentifierValue<T>>,
     // TODO
     pub finger_table: Vec<IdentifierValue<T>>,
 }
@@ -44,7 +44,7 @@ impl<T: Identify + Copy + Clone> Routing<T> {
         Self {
             current: IdentifierValue::new(current),
             predecessor: predecessor,
-            successor: IdentifierValue::new(successor),
+            successor: vec![IdentifierValue::new(successor)],
             finger_table: finger_table.into_iter().map(IdentifierValue::new).collect(),
         }
     }
@@ -56,13 +56,13 @@ impl<T: Identify + Copy + Clone> Routing<T> {
 
     /// Sets the current successor.
     pub fn set_successor(&mut self, new_succ: T) {
-        self.successor = IdentifierValue::new(new_succ);
+        self.successor[0] = IdentifierValue::new(new_succ);
 
         // update finger table so that all fingers closer than successor point to successor
-        let diff = self.successor.identifier() - self.current.identifier();
+        let diff = self.successor.first().unwrap().identifier() - self.current.identifier();
 
         for i in diff.leading_zeros() as usize..self.finger_table.len() {
-            self.finger_table[i] = self.successor;
+            self.finger_table[i] = *self.successor.first().unwrap();
         }
     }
 
@@ -77,6 +77,7 @@ impl<T: Identify + Copy + Clone> Routing<T> {
     }
 
     /// Checks whether this peer is responsible for the given identifier.
+    // TODO: remove this method if not needed anymore
     pub fn responsible_for(&self, identifier: Identifier) -> bool {
         unimplemented!()
         //identifier.is_between(&self.predecessor.identifier(), &self.current.identifier())
@@ -86,7 +87,7 @@ impl<T: Identify + Copy + Clone> Routing<T> {
     pub fn closest_preceding_peer(&self, identifier: Identifier) -> &IdentifierValue<T> {
         let entry = finger_table_entry_number(self.current.identifier(), identifier);
 
-        self.finger_table.get(entry as usize).unwrap_or(&self.successor)
+        self.finger_table.get(entry as usize).unwrap_or(&self.successor.first().unwrap())
     }
 
     pub fn preds_consistent(mut peers: Vec<Self>) -> bool {

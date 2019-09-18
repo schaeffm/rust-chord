@@ -109,7 +109,7 @@ impl<C: ConnectionTrait<Address = A>, A: PeerAddr> Stabilization<C, A> {
         let (current, successor) = {
             let routing = self.routing.lock().unwrap();
 
-            (routing.current, routing.successor)
+            (routing.current, *routing.successor.first().unwrap())
         };
 
         info!(
@@ -139,7 +139,7 @@ impl<C: ConnectionTrait<Address = A>, A: PeerAddr> Stabilization<C, A> {
         let (current, successor, fingers) = {
             let routing = self.routing.lock().unwrap();
 
-            (routing.current, routing.successor, routing.fingers())
+            (routing.current, *routing.successor.first().unwrap(), routing.fingers())
         };
 
         info!("Update fingers using successor with address {}", *successor);

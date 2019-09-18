@@ -66,7 +66,7 @@ impl<A: PeerAddr> P2PHandler<A> {
                 info!("Updated predecessor to new address {}", predecessor_addr);
             }
 
-            if *routing.successor == *routing.current {
+            if **routing.successor.first().unwrap() == *routing.current {
                 // If successor points to ourselves, update it to this peer.
                 routing.set_successor(predecessor_addr);
 
@@ -193,8 +193,8 @@ impl<A: PeerAddr> P2PHandler<A> {
         info!("Received PEER FIND request for identifier {}", identifier);
 
         // check if given key falls into successor range
-        if identifier.is_between(&routing.current.identifier(), &routing.successor.identifier()) {
-            let socket_addr = *routing.successor;
+        if identifier.is_between(&routing.current.identifier(), &routing.successor.first().unwrap().identifier()) {
+            let socket_addr = **routing.successor.first().unwrap();
 
             info!("Replying with PEER FOUND with address {}", socket_addr);
 
