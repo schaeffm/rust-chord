@@ -6,11 +6,11 @@ edition = "2018"
 
 [dependencies]
 bigint = { version = "4.4.1", features = ["std"] }
-byteorder = "1.3.1"
-log = "0.4.6"
+byteorder = "1.3.2"
+log = "0.4.8"
 sha2 = "0.8.0"
 rust-ini = "0.13.0"
 stderrlog = "0.4.1"
-structopt = "0.2.15"
+structopt = "0.3.2"
 threadpool = "1.7.1"
 lazy_static = "1.4.0"
