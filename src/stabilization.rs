@@ -114,7 +114,7 @@ impl<C: ConnectionTrait<Address=A>, A: PeerAddr> Stabilization<C, A> {
             (routing.current, routing.successor.clone())
         };
 
-        let mut succ_successors: Vec<A> = successors
+        let succ_successors: Vec<A> = successors
             .iter()
             .map(|succ| self.procedures.get_successors(*current, **succ))
             .filter_map(Result::ok)

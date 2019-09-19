@@ -395,7 +395,7 @@ impl MessagePayload for SuccessorsReply<SocketAddr> {
     }
 
     fn write_to(&self, writer: &mut dyn Write) -> io::Result<()> {
-        writer.write_u8(self.successors.len() as u8);
+        writer.write_u8(self.successors.len() as u8)?;
 
         for socket_addr in &self.successors {
             let ip_address = match socket_addr.ip() {

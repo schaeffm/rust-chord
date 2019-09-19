@@ -26,14 +26,8 @@ impl<A: PeerAddr> P2PHandler<A> {
     /// Creates a new `P2PHandler` instance.
     pub fn new(routing: Arc<Mutex<Routing<A>>>) -> Self {
         let storage = Mutex::new(Storage::new());
+
         Self { routing, storage }
-    }
-
-    // FIXME? Does a node have to check / can it check if it is responsible for a key?
-    fn responsible_for(&self, identifier: Identifier) -> bool {
-        let routing = self.routing.lock().unwrap();
-
-        routing.responsible_for(identifier)
     }
 
     fn closest_preceding_peer(&self, identifier: Identifier) -> A {
@@ -162,8 +156,11 @@ impl<A: PeerAddr> P2PHandler<A> {
         where
             C: ConnectionTrait<Address=A>,
     {
-        let current = self.routing.lock().unwrap().current.clone();
-        let successor = self.routing.lock().unwrap().successor.first().unwrap().clone();
+        let (current, successor) = {
+            let routing = self.routing.lock().unwrap();
+            (routing.current.clone(),
+             routing.successor.first().ok_or("Empty successor list")?.clone())
+        };
         let identifier = peer_find.identifier;
 
         info!("Received PEER FIND request for identifier {}", identifier);
@@ -229,13 +226,10 @@ impl<A: PeerAddr> P2PHandler<A> {
         Ok(())
     }
 
-    fn handle_predecessor_notify<C>(
+    fn handle_predecessor_notify(
         &self,
-        mut con: C,
         predecessor_notify: PredecessorNotify<A>,
     ) -> crate::Result<()>
-        where
-            C: ConnectionTrait<Address=A>,
     {
         let predecessor_addr = predecessor_notify.socket_addr;
         self.notify_predecessor(predecessor_addr);
@@ -256,7 +250,7 @@ impl<A: PeerAddr> P2PHandler<A> {
             Message::PeerFind(peer_find) => self.handle_peer_find(con, peer_find),
             Message::SuccessorsRequest() => self.handle_successors_request(con),
             Message::PredecessorNotify(predecessor_get) => {
-                self.handle_predecessor_notify(con, predecessor_get)
+                self.handle_predecessor_notify(predecessor_get)
             }
             _ => Err(Box::new(MessageError::new(msg))),
         }

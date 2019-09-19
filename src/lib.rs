@@ -67,7 +67,6 @@ extern crate sha2;
 extern crate threadpool;
 
 use crate::config::Config;
-use crate::routing::identifier::Identifier;
 use crate::handler::{ApiHandler, P2PHandler};
 use crate::network::ConnectionTrait;
 use crate::network::{PeerAddr, Server};
@@ -213,11 +212,13 @@ impl<C: ConnectionTrait<Address = A>, A: PeerAddr + Display + Sync> Display for 
         };
         let succ: Vec<A> = routing.successor.iter().map(|x| **x).collect();
         let fingers: Vec<A> = routing.finger_table.clone().into_iter().map(|x| *x).collect();
+        let storage = fingers.clone();
         write!(f,
                "Peer {}\n\
                Predecessor: {}\n\
                Successors: {:?}\n\
-               Fingers: {:?}\n",
-               addr, pred, succ, fingers)
+               Fingers: {:?}\n\
+               Storage: {:?}\n",
+               addr, pred, succ, fingers, storage)
     }
 }

@@ -55,17 +55,12 @@ impl<T: Identify + Copy + Clone> Routing<T> {
 
     pub fn set_successors(&mut self, new_succs: Vec<T>) {
         self.successor = new_succs.into_iter().map(IdentifierValue::new).collect();
-    }
+        if let Some(successor) = self.successor.first() {
+            let diff = successor.identifier() - self.current.identifier();
 
-    /// Sets the current successor.
-    pub fn set_successor(&mut self, new_succ: T) {
-        self.successor[0] = IdentifierValue::new(new_succ);
-
-        // update finger table so that all fingers closer than successor point to successor
-        let diff = self.successor.first().unwrap().identifier() - self.current.identifier();
-
-        for i in diff.leading_zeros() as usize..self.finger_table.len() {
-            self.finger_table[i] = *self.successor.first().unwrap();
+            for i in diff.leading_zeros() as usize..self.finger_table.len() {
+                self.finger_table[i] = *successor;
+            }
         }
     }
 
@@ -79,12 +74,6 @@ impl<T: Identify + Copy + Clone> Routing<T> {
         self.finger_table.len()
     }
 
-    /// Checks whether this peer is responsible for the given identifier.
-    // TODO: remove this method if not needed anymore
-    pub fn responsible_for(&self, identifier: Identifier) -> bool {
-        identifier.is_between(&self.predecessor.unwrap().identifier(), &self.current.identifier())
-    }
-
     /// Returns the peer closest to the given identifier.
     pub fn closest_preceding_peer(&self, identifier: Identifier) -> &IdentifierValue<T> {
         for finger in &self.finger_table {
@@ -95,7 +84,7 @@ impl<T: Identify + Copy + Clone> Routing<T> {
         return self.successor.first().unwrap();
     }
 
-    pub fn preds_consistent(mut peers: Vec<Self>) -> bool {
+    pub fn preds_consistent(_peers: Vec<Self>) -> bool {
         /*
         let len = peers.len();
         peers.sort_by(|a, b| a.current.identifier().cmp(&b.current.identifier()));
@@ -111,7 +100,7 @@ impl<T: Identify + Copy + Clone> Routing<T> {
 }
 
 /// Returns the finger table entry number for the closest predecessor.
-fn finger_table_entry_number(current: Identifier, lookup: Identifier) -> u8 {
+fn _finger_table_entry_number(current: Identifier, lookup: Identifier) -> u8 {
     let diff = lookup - current - Identifier::new_from_usize(1);
     let zeros = diff.leading_zeros();
 

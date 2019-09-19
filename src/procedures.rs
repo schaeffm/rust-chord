@@ -1,11 +1,11 @@
 //! A collection of procedures used in various places.
 
 use crate::error::MessageError;
-use crate::message::p2p::{PeerFind, PredecessorNotify, StorageGet, StoragePut, SuccessorsRequest};
+use crate::message::p2p::{PeerFind, PredecessorNotify, StorageGet, StoragePut};
 use crate::message::Message;
 use crate::network::ConnectionTrait;
 use crate::network::PeerAddr;
-use crate::routing::identifier::{Identifier, IdentifierValue};
+use crate::routing::identifier::Identifier;
 use crate::storage::Key;
 use std::marker::PhantomData;
 use std::sync::Mutex;
@@ -127,8 +127,11 @@ impl<C: ConnectionTrait<Address = A>, A: PeerAddr> Procedures<C, A> {
     /// Opens a P2P connection and sends a PREDECESSOR NOTIFY message to `peer_addr` to receive a
     /// reply with the socket address of `socket_addr`.
     pub fn notify(&self, socket_addr: A, peer_addr: A) {
-        C::open(peer_addr, self.timeout).and_then(|mut con|
-            con.send(Message::PredecessorNotify(PredecessorNotify { socket_addr })));
+        let connect = C::open(peer_addr, self.timeout);
+        let reply = Message::PredecessorNotify(PredecessorNotify { socket_addr });
+        if let Err(_) = connect.and_then(|mut con| con.send(reply)) {
+            info!("Failed to notify {}", peer_addr);
+        }
     }
 
     pub fn get_successors(&self, socket_addr: A, peer_addr: A) -> crate::Result<Vec<A>> {
