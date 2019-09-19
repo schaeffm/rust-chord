@@ -231,7 +231,7 @@ fn handle_inspect(peers: &HashMap<u64, Arc<Peer<MockConn, MockAddr>>>) {
     }
 }
 
-fn handle_quit() {}
+fn _handle_quit() {}
 
 fn handle_help() {
     println!("Commands:");
@@ -321,7 +321,7 @@ fn handle_join_impl(peers: &mut HashMap<u64, Arc<Peer<MockConn, MockAddr>>>) -> 
     Ok(())
 }
 
-fn handle_consistency(peers: &HashMap<u64, Arc<Peer<MockConn, MockAddr>>>) {
+fn _handle_consistency(peers: &HashMap<u64, Arc<Peer<MockConn, MockAddr>>>) {
     let peers: Vec<Arc<Peer<_,_>>> = peers.values().map(|x| x.clone()).collect();;
     Peer::preds_consistent(peers);
 }

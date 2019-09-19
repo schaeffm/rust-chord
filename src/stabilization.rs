@@ -50,12 +50,12 @@ impl<A: PeerAddr, C: ConnectionTrait<Address=A>> Bootstrap<C, A> {
         let current_id = self.current_addr.identifier();
 
         let successor = procedures.find_peer(current_id, self.boot_addr)?;
-        let predecessor = procedures.notify_predecessor(self.current_addr, successor)?;
+        let predecessor = None;
         let finger_table = vec![self.current_addr; self.fingers];
 
         Ok(Routing::new(
             self.current_addr,
-            Some(predecessor),
+            predecessor,
             successor,
             finger_table,
         ))
@@ -114,67 +114,29 @@ impl<C: ConnectionTrait<Address=A>, A: PeerAddr> Stabilization<C, A> {
             (routing.current, routing.successor.clone())
         };
 
-        //let successor = successors.first().unwrap();
-        //println!("succs{:?}", successors);
-        //TODO: move to procedures
-        let (succ, mut candidates): (A, Vec<A>) = successors
+        let mut succ_successors: Vec<A> = successors
             .iter()
-            .map(|succ| (**succ, self.procedures.get_successors(*current, **succ)))
-            .filter(|(_, succs)| succs.is_ok())
-            .map(|(succ, succs)| (succ, succs.unwrap()))
+            .map(|succ| self.procedures.get_successors(*current, **succ))
+            .filter_map(Result::ok)
             .next()
-            .unwrap();
+            .unwrap_or(Vec::new());
 
-        let mut candidates = candidates.into_iter().peekable();
-        if let Some(fst) = &candidates.peek() {
-            if !fst.identifier().is_between_end(&current.identifier(), &succ.identifier()) {
-                candidates.next();
-            }
+        if let Some(succ) = succ_successors.first() {
+            self.procedures.notify(*current, *succ);
         }
 
-        let mut succ_successors: Vec<A> = candidates.take(4).collect::<Vec<A>>();
         self.routing.lock().unwrap().set_successors(succ_successors);
         Ok(())
     }
 
-    fn update_successor(&self) -> crate::Result<()> {
-        let (current, successor) = {
-            let routing = self.routing.lock().unwrap();
-
-            (routing.current, *routing.successor.first().unwrap())
-        };
-
-        info!(
-            "Obtaining new successor from current successor with address {}",
-            *successor
-        );
-
-        let new_successor = self.procedures.notify_predecessor(*current, *successor)?;
-
-        let current_id = current.identifier();
-        let successor_id = successor.identifier();
-
-        if new_successor
-            .identifier()
-            .is_between(&current_id, &successor_id)
-        {
-            info!("Updating successor to address {}", new_successor);
-
-            let mut routing = self.routing.lock().unwrap();
-            routing.set_successor(new_successor);
-        }
-
-        Ok(())
-    }
-
     fn update_fingers(&self) -> crate::Result<()> {
-        let (current, successor, fingers) = {
+        let (current, fingers) = {
             let routing = self.routing.lock().unwrap();
 
-            (routing.current, *routing.successor.first().unwrap(), routing.fingers())
+            (routing.current, routing.fingers())
         };
 
-        info!("Update fingers using successor with address {}", *successor);
+        info!("Update fingers");
 
         for i in 0..fingers {
             // TODO do not hardcode for 256 bits here

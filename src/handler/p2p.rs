@@ -42,40 +42,16 @@ impl<A: PeerAddr> P2PHandler<A> {
         **routing.closest_preceding_peer(identifier)
     }
 
-    fn notify_predecessor(&self, predecessor_addr: A) -> Option<A> {
+    fn notify_predecessor(&self, predecessor_addr: A) {
         let mut routing = self.routing.lock().unwrap();
 
-        if let Some(old_predecessor_addr) = routing.predecessor {
-            // 1. check if the predecessor is closer than the previous predecessor
-            if predecessor_addr.identifier().is_between(&old_predecessor_addr.identifier(), &routing.current.identifier()) {
-                //if routing.responsible_for(predecessor_addr.identifier()) {
-                // 2. update the predecessor if necessary
-                routing.set_predecessor(predecessor_addr);
-
-                info!("Updated predecessor to new address {}", predecessor_addr);
-
-                // TODO maybe check whether old predecessor is actually still reachable?
-                // TODO give data to new predecessor!!!
-            }
-
-            if *routing.predecessor.unwrap() == *routing.current {
-                // if predecessor points to ourselves, update it to this peer.
-                routing.set_predecessor(predecessor_addr);
-
-                info!("Updated predecessor to new address {}", predecessor_addr);
-            }
-
-            if **routing.successor.first().unwrap() == *routing.current {
-                // If successor points to ourselves, update it to this peer.
-                routing.set_successor(predecessor_addr);
-
-                info!("Updated successor to new address {}", predecessor_addr);
-            }
-
-            Some(*old_predecessor_addr)
-        } else {
-            None
-        }
+        match routing.predecessor {
+            None =>
+                routing.set_predecessor(Some(predecessor_addr)),
+            Some(predecessor) if predecessor_addr.identifier().is_between(&predecessor.identifier(), &routing.current.identifier()) =>
+                routing.set_predecessor(Some(predecessor_addr)),
+            _ => (),
+        };
     }
 
     fn get_from_storage(&self, key: Key) -> Option<Vec<u8>> {
@@ -245,8 +221,9 @@ impl<A: PeerAddr> P2PHandler<A> {
         };
         successors_pred.push(*routing.current);
         successors_pred.append(&mut successors);
-        let successor_reply = SuccessorsReply{
-            successors: successors_pred };
+        let successor_reply = SuccessorsReply {
+            successors: successors_pred
+        };
         con.send(Message::SuccessorsReply(successor_reply))?;
 
         Ok(())
@@ -261,27 +238,7 @@ impl<A: PeerAddr> P2PHandler<A> {
             C: ConnectionTrait<Address=A>,
     {
         let predecessor_addr = predecessor_notify.socket_addr;
-
-        info!("Received PREDECESSOR GET request from {}", predecessor_addr);
-
-        if let Some(socket_addr) = self.notify_predecessor(predecessor_addr) {
-            info!(
-                "Replying with PREDECESSOR FOUND and address {}",
-                socket_addr
-            );
-
-            // 3. return the current predecessor with PREDECESSOR FOUND
-            let predecessor_found = PredecessorFound { socket_addr };
-            con.send(Message::PredecessorFound(predecessor_found))?;
-        } else {
-            info!(
-                "Replying with PREDECESSOR NOT FOUND"
-            );
-
-            // 3. return the current predecessor with PREDECESSOR FOUND
-            con.send(Message::PredecessorNotFound)?;
-        }
-
+        self.notify_predecessor(predecessor_addr);
         Ok(())
     }
 

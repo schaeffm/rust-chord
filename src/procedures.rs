@@ -125,27 +125,10 @@ impl<C: ConnectionTrait<Address = A>, A: PeerAddr> Procedures<C, A> {
     /// Notify the successor of a potential predecessor and asks to reply with the current predecessor.
     ///
     /// Opens a P2P connection and sends a PREDECESSOR NOTIFY message to `peer_addr` to receive a
-    /// reply with the socket addres of `socket_addr`.
-    pub fn notify_predecessor(&self, socket_addr: A, peer_addr: A) -> crate::Result<A> {
-        debug!("Getting predecessor of peer {}", peer_addr);
-
-        let mut con = C::open(peer_addr, self.timeout)?;
-
-        con.send(Message::PredecessorNotify(PredecessorNotify {
-            socket_addr,
-        }))?;
-
-        let msg = con.receive()?;
-
-        if let Message::PredecessorFound(predecessor_reply) = msg {
-            info!("Predecessor received from peer {}", peer_addr);
-
-            Ok(predecessor_reply.socket_addr)
-        } else {
-            warn!("No predecessor received from peer {}", peer_addr);
-
-            Err(Box::new(MessageError::new(msg)))
-        }
+    /// reply with the socket address of `socket_addr`.
+    pub fn notify(&self, socket_addr: A, peer_addr: A) {
+        C::open(peer_addr, self.timeout).and_then(|mut con|
+            con.send(Message::PredecessorNotify(PredecessorNotify { socket_addr })));
     }
 
     pub fn get_successors(&self, socket_addr: A, peer_addr: A) -> crate::Result<Vec<A>> {
@@ -159,8 +142,15 @@ impl<C: ConnectionTrait<Address = A>, A: PeerAddr> Procedures<C, A> {
 
         if let Message::SuccessorsReply(successors_reply) = msg {
             info!("Successors received from peer {}", peer_addr);
+            let mut successors = successors_reply.successors.into_iter().peekable();
+            if let Some(fst) = &successors.peek() {
+                if !fst.identifier().
+                    is_between_end(&socket_addr.identifier(), &peer_addr.identifier()) {
+                    successors.next();
+                }
+            }
 
-            Ok(successors_reply.successors)
+            Ok(successors.take(4).collect())
         } else {
             warn!("No successors received from peer {}", peer_addr);
 

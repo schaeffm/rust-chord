@@ -49,8 +49,8 @@ impl<T: Identify + Copy + Clone> Routing<T> {
     }
 
     /// Sets the predecessor's address.
-    pub fn set_predecessor(&mut self, new_pred: T) {
-        self.predecessor = Some(IdentifierValue::new(new_pred)); // FIXME?
+    pub fn set_predecessor(&mut self, new_pred: Option<T>) {
+        self.predecessor = new_pred.map(IdentifierValue::new);
     }
 
     pub fn set_successors(&mut self, new_succs: Vec<T>) {
