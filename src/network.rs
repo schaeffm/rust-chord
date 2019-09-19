@@ -35,7 +35,7 @@ const MAX_MESSAGE_SIZE: usize = 64000;
 /// con.send(&msg).expect("could not send message");
 /// ```
 pub trait PeerAddr:
-    Clone + Copy + std::fmt::Display + std::fmt::Debug + std::cmp::PartialEq + Send + Identify + 'static
+    Clone + Copy + std::fmt::Display + std::fmt::Debug + std::cmp::PartialEq + Send + Identify + 'static + std::cmp::Eq + std::hash::Hash
 {
 }
 impl<T> PeerAddr for T where
@@ -47,6 +47,8 @@ impl<T> PeerAddr for T where
         + Send
         + Identify
         + 'static
+        + std::hash::Hash
+        + std::cmp::Eq
 {
 }
 pub trait ConnectionTrait

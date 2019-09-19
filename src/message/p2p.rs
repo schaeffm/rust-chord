@@ -129,6 +129,28 @@ pub struct SuccessorsReply<A> {
     pub successors: Vec<A>,
 }
 
+#[derive(Debug, PartialEq)]
+pub struct SuccessorListChanges<A> {
+    pub old_successors: Vec<A>,
+    pub new_successors: Vec<A>,
+}
+
+/// This message is used to tell a peer to store all given keys and their associated
+/// values. The peer is expected to retrieve values of all keys not previously stored.
+///
+#[derive(Debug, PartialEq)]
+pub struct KeyPut {
+    pub keys: Vec<Identifier>,
+}
+
+/// This message is used to tell a peer to remove all given keys and their associated
+/// values from its storage.
+///
+#[derive(Debug, PartialEq)]
+pub struct KeyRemove {
+    pub keys: Vec<Identifier>,
+}
+
 impl MessagePayload for StorageGet {
     fn parse(reader: &mut dyn Read) -> io::Result<Self> {
         let replication_index = reader.read_u8()?;
@@ -405,6 +427,140 @@ impl MessagePayload for SuccessorsReply<SocketAddr> {
 
             writer.write_all(&ip_address.octets())?;
             writer.write_u16::<NetworkEndian>(socket_addr.port())?;
+        }
+
+        Ok(())
+    }
+}
+
+impl MessagePayload for SuccessorListChanges<SocketAddr> {
+    fn parse(reader: &mut dyn Read) -> io::Result<Self> {
+        let mut old_successors = Vec::new();
+        let mut new_successors = Vec::new();
+
+        let length = reader.read_u8()?;
+
+        for _ in 0..length {
+            let mut ip_arr = [0; 16];
+            reader.read_exact(&mut ip_arr)?;
+
+            let ipv6 = Ipv6Addr::from(ip_arr);
+
+            let ip_address = match ipv6.to_ipv4() {
+                Some(ipv4) => IpAddr::V4(ipv4),
+                None => IpAddr::V6(ipv6),
+            };
+
+            let port = reader.read_u16::<NetworkEndian>()?;
+
+            let socket_addr = SocketAddr::new(ip_address, port);
+
+            old_successors.push(socket_addr);
+        }
+
+        let length = reader.read_u8()?;
+
+        for _ in 0..length {
+            let mut ip_arr = [0; 16];
+            reader.read_exact(&mut ip_arr)?;
+
+            let ipv6 = Ipv6Addr::from(ip_arr);
+
+            let ip_address = match ipv6.to_ipv4() {
+                Some(ipv4) => IpAddr::V4(ipv4),
+                None => IpAddr::V6(ipv6),
+            };
+
+            let port = reader.read_u16::<NetworkEndian>()?;
+
+            let socket_addr = SocketAddr::new(ip_address, port);
+
+            new_successors.push(socket_addr);
+        }
+
+        Ok(SuccessorListChanges { old_successors, new_successors })
+    }
+
+    fn write_to(&self, writer: &mut dyn Write) -> io::Result<()> {
+        writer.write_u8(self.old_successors.len() as u8)?;
+
+        for socket_addr in &self.old_successors {
+            let ip_address = match socket_addr.ip() {
+                IpAddr::V4(ipv4) => ipv4.to_ipv6_mapped(),
+                IpAddr::V6(ipv6) => ipv6,
+            };
+
+            writer.write_all(&ip_address.octets())?;
+            writer.write_u16::<NetworkEndian>(socket_addr.port())?;
+        }
+
+        writer.write_u8(self.new_successors.len() as u8)?;
+
+        for socket_addr in &self.new_successors {
+            let ip_address = match socket_addr.ip() {
+                IpAddr::V4(ipv4) => ipv4.to_ipv6_mapped(),
+                IpAddr::V6(ipv6) => ipv6,
+            };
+
+            writer.write_all(&ip_address.octets())?;
+            writer.write_u16::<NetworkEndian>(socket_addr.port())?;
+        }
+
+        Ok(())
+    }
+}
+
+
+impl MessagePayload for KeyPut {
+    fn parse(reader: &mut dyn Read) -> io::Result<Self> {
+        let mut keys = Vec::new();
+
+        let length = reader.read_u32::<NetworkEndian>()?;
+
+        for _ in 0..length {
+            let mut id_arr = [0; 32];
+            reader.read_exact(&mut id_arr)?;
+            let identifier = Identifier::new(&id_arr);
+
+            keys.push(identifier);
+        }
+
+        Ok(KeyPut { keys })
+    }
+
+    fn write_to(&self, writer: &mut dyn Write) -> io::Result<()> {
+        writer.write_u32::<NetworkEndian>(self.keys.len() as u32)?;
+
+        for key in &self.keys {
+            writer.write_all(&key.as_bytes())?;
+        }
+
+        Ok(())
+    }
+}
+
+impl MessagePayload for KeyRemove {
+    fn parse(reader: &mut dyn Read) -> io::Result<Self> {
+        let mut keys = Vec::new();
+
+        let length = reader.read_u32::<NetworkEndian>()?;
+
+        for _ in 0..length {
+            let mut id_arr = [0; 32];
+            reader.read_exact(&mut id_arr)?;
+            let identifier = Identifier::new(&id_arr);
+
+            keys.push(identifier);
+        }
+
+        Ok(KeyRemove { keys })
+    }
+
+    fn write_to(&self, writer: &mut dyn Write) -> io::Result<()> {
+        writer.write_u32::<NetworkEndian>(self.keys.len() as u32)?;
+
+        for key in &self.keys {
+            writer.write_all(&key.as_bytes())?;
         }
 
         Ok(())

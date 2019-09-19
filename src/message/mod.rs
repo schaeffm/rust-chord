@@ -60,6 +60,10 @@ pub enum Message<A> {
     /// A previous DHT GET operation did not find any value for the requested
     /// key.
     DhtFailure(DhtFailure),
+    /// Tell a node to store certain keys and associated values.
+    KeyPut(KeyPut),
+    /// Tell a node to remove certain keys and associated values.
+    KeyRemove(KeyRemove),
     /// Obtain the value for the given key if the peer is responsible for.
     StorageGet(StorageGet),
     /// Store a message at a specific peer which is responsible for the key.
@@ -85,6 +89,7 @@ pub enum Message<A> {
     SuccessorsRequest(),
     /// Request to `SUCCESSORS REQUEST` with the successor list.
     SuccessorsReply(SuccessorsReply<A>),
+    SuccessorlistChanges(SuccessorListChanges<A>),
 }
 
 impl Message<SocketAddr> {
@@ -92,6 +97,9 @@ impl Message<SocketAddr> {
     const DHT_GET: u16 = 651;
     const DHT_SUCCESS: u16 = 652;
     const DHT_FAILURE: u16 = 653;
+
+    const KEY_PUT: u16 = 800;
+    const KEY_REMOVE: u16 = 801;
 
     const STORAGE_GET: u16 = 1000;
     const STORAGE_PUT: u16 = 1001;
@@ -107,6 +115,7 @@ impl Message<SocketAddr> {
 
     const SUCCESSORS_REQUEST: u16 = 1080;
     const SUCCESSORS_REPLY: u16 = 1081;
+    const SUCCESSORS_LIST_CHANGES: u16 = 1082;
 
     pub fn parse<T: Read>(mut reader: T) -> io::Result<Self> {
         let size = reader.read_u16::<NetworkEndian>()?;
@@ -169,6 +178,14 @@ impl Message<SocketAddr> {
                 writer.write_u16::<NetworkEndian>(Self::DHT_FAILURE)?;
                 dht_failure.write_to(&mut writer)?;
             }
+            Message::KeyPut(key_put) => {
+                writer.write_u16::<NetworkEndian>(Self::KEY_PUT)?;
+                key_put.write_to(&mut writer)?;
+            }
+            Message::KeyRemove(key_remove) => {
+                writer.write_u16::<NetworkEndian>(Self::KEY_REMOVE)?;
+                key_remove.write_to(&mut writer)?;
+            }
             Message::StorageGet(storage_get) => {
                 writer.write_u16::<NetworkEndian>(Self::STORAGE_GET)?;
                 storage_get.write_to(&mut writer)?;
@@ -215,6 +232,10 @@ impl Message<SocketAddr> {
                 writer.write_u16::<NetworkEndian>(Self::SUCCESSORS_REPLY)?;
                 successors_reply.write_to(&mut writer)?;
             }
+            Message::SuccessorlistChanges(successors_changes) => {
+                writer.write_u16::<NetworkEndian>(Self::SUCCESSORS_LIST_CHANGES)?;
+                successors_changes.write_to(&mut writer)?;
+            }
         }
 
         // write size at beginning of writer
@@ -237,6 +258,8 @@ where
             Message::DhtGet(_) => "DHT GET",
             Message::DhtSuccess(_) => "DHT SUCCESS",
             Message::DhtFailure(_) => "DHT FAILURE",
+            Message::KeyPut(_) => "KEY PUT",
+            Message::KeyRemove(_) => "KEY REMOVE",
             Message::StorageGet(_) => "STORAGE GET",
             Message::StoragePut(_) => "STORAGE PUT",
             Message::StorageGetSuccess(_) => "STORAGE GET SUCCESS",
@@ -249,6 +272,7 @@ where
             Message::PredecessorNotFound => "PREDECESSOR NOT FOUND",
             Message::SuccessorsRequest() => "SUCCESSORS REQUEST",
             Message::SuccessorsReply(_) => "SUCCESSORS REPLY",
+            Message::SuccessorlistChanges(_) => "SUCCESSORS LIST CHANGES",
         };
 
         name.fmt(f)

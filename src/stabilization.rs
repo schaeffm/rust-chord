@@ -72,6 +72,7 @@ pub struct Stabilization<C, A>
 {
     procedures: Procedures<C, A>,
     routing: Arc<Mutex<Routing<A>>>,
+
 }
 
 impl<C: ConnectionTrait<Address=A>, A: PeerAddr> Stabilization<C, A> {
@@ -114,18 +115,23 @@ impl<C: ConnectionTrait<Address=A>, A: PeerAddr> Stabilization<C, A> {
             (routing.current, routing.successor.clone())
         };
 
-        let succ_successors: Vec<A> = successors
+        let new_successors: Vec<_> = successors
             .iter()
             .map(|succ| self.procedures.get_successors(*current, **succ))
             .filter_map(Result::ok)
             .next()
             .unwrap_or(Vec::new());
 
-        if let Some(succ) = succ_successors.first() {
-            self.procedures.notify(*current, *succ);
+        if let Some(succ) = new_successors.first() {
+            self.procedures.notify(*current, **succ);
         }
 
-        self.routing.lock().unwrap().set_successors(succ_successors);
+        let a = successors.iter().map(|i| **i).collect();
+        let b = new_successors.iter().map(|i| **i).collect();
+
+        self.procedures.send_successor_changes(*current, a, b);
+
+        self.routing.lock().unwrap().set_successors(new_successors);
         Ok(())
     }
 

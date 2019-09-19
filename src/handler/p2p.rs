@@ -9,8 +9,11 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::io;
 use std::sync::{Arc, Mutex};
+use std::collections::HashSet;
+use std::iter::FromIterator;
+use crate::routing::identifier::Identify;
 
-type Storage = HashMap<Key, Vec<u8>>;
+pub type Storage = HashMap<Key, Vec<u8>>;
 
 /// Handler for peer-to-peer requests
 ///
@@ -19,14 +22,12 @@ type Storage = HashMap<Key, Vec<u8>>;
 #[derive(Debug)]
 pub struct P2PHandler<A> {
     routing: Arc<Mutex<Routing<A>>>,
-    storage: Mutex<Storage>,
+    storage: Arc<Mutex<Storage>>,
 }
 
 impl<A: PeerAddr> P2PHandler<A> {
     /// Creates a new `P2PHandler` instance.
-    pub fn new(routing: Arc<Mutex<Routing<A>>>) -> Self {
-        let storage = Mutex::new(Storage::new());
-
+    pub fn new(routing: Arc<Mutex<Routing<A>>>, storage: Arc<Mutex<Storage>>) -> Self {
         Self { routing, storage }
     }
 
@@ -236,6 +237,49 @@ impl<A: PeerAddr> P2PHandler<A> {
         Ok(())
     }
 
+    fn handle_successor_changes<C>(
+        &self,
+        _con: C,
+        successor_changes: SuccessorListChanges<A>,
+    ) -> crate::Result<()>
+        where
+        C: ConnectionTrait<Address=A>
+    {
+        let old_successors_set: HashSet<_> = HashSet::from_iter(successor_changes.old_successors.iter().map(|i| *i).clone());
+        let new_successors_set: HashSet<_> = HashSet::from_iter(successor_changes.new_successors.iter().map(|i| *i).clone());
+
+
+        let own_keys: Vec<Identifier> = self.storage.lock().unwrap()
+            .keys()
+            .filter(|k| self.routing.lock().unwrap().responsible_for(k.identifier()))
+            .map(|k| k.identifier())
+            .collect();
+
+        // all peers that are not in the successors list anymore
+        for peer in old_successors_set.difference(&new_successors_set) {
+            // send KeyRemove to this peer
+            //let keys = self.procedures
+            let connect = C::open(*peer, 3600);
+            let msg = Message::KeyRemove(KeyRemove { keys: own_keys.clone() });
+            if let Err(_) = connect.and_then(|mut con| con.send(msg)) {
+                info!("Failed to notify {} about keys it is no longer responsible for.", *peer);
+            }
+        }
+
+        // all peers that are new in the successors list
+        for peer in new_successors_set.difference(&old_successors_set) {
+            // send KeyPut to this peer
+
+            let connect = C::open(*peer, 3600);
+            let msg = Message::KeyPut(KeyPut { keys: own_keys.clone() });
+            if let Err(_) = connect.and_then(|mut con| con.send(msg)) {
+                info!("Failed to notify {} about keys it is responsible for.", *peer);
+            }
+        }
+
+        Ok(())
+    }
+
     fn handle_connection<C>(&self, mut con: C) -> crate::Result<()>
         where
             C: ConnectionTrait<Address=A>,
@@ -251,6 +295,9 @@ impl<A: PeerAddr> P2PHandler<A> {
             Message::SuccessorsRequest() => self.handle_successors_request(con),
             Message::PredecessorNotify(predecessor_get) => {
                 self.handle_predecessor_notify(predecessor_get)
+            }
+            Message::SuccessorlistChanges(successor_changes) => {
+                self.handle_successor_changes(con, successor_changes)
             }
             _ => Err(Box::new(MessageError::new(msg))),
         }

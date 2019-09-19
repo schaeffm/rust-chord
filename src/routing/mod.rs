@@ -53,8 +53,8 @@ impl<T: Identify + Copy + Clone> Routing<T> {
         self.predecessor = new_pred.map(IdentifierValue::new);
     }
 
-    pub fn set_successors(&mut self, new_succs: Vec<T>) {
-        self.successor = new_succs.into_iter().map(IdentifierValue::new).collect();
+    pub fn set_successors(&mut self, new_succs: Vec<IdentifierValue<T>>) {
+        self.successor = new_succs;
         if let Some(successor) = self.successor.first() {
             let diff = successor.identifier() - self.current.identifier();
 
@@ -72,6 +72,15 @@ impl<T: Identify + Copy + Clone> Routing<T> {
     /// Returns the number of fingers.
     pub fn fingers(&self) -> usize {
         self.finger_table.len()
+    }
+
+    /// Checks whether this peer is responsible for the given identifier.
+    pub fn responsible_for(&self, identifier: Identifier) -> bool {
+        if let Some(predecessor) = self.predecessor {
+            identifier.is_between(&predecessor.identifier(), &self.current.identifier())
+        } else {
+            false
+        }
     }
 
     /// Returns the peer closest to the given identifier.

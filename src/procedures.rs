@@ -1,11 +1,11 @@
 //! A collection of procedures used in various places.
 
 use crate::error::MessageError;
-use crate::message::p2p::{PeerFind, PredecessorNotify, StorageGet, StoragePut};
+use crate::message::p2p::{PeerFind, PredecessorNotify, StorageGet, StoragePut, SuccessorListChanges};
 use crate::message::Message;
 use crate::network::ConnectionTrait;
 use crate::network::PeerAddr;
-use crate::routing::identifier::Identifier;
+use crate::routing::identifier::{Identifier, IdentifierValue};
 use crate::storage::Key;
 use std::marker::PhantomData;
 use std::sync::Mutex;
@@ -134,7 +134,7 @@ impl<C: ConnectionTrait<Address = A>, A: PeerAddr> Procedures<C, A> {
         }
     }
 
-    pub fn get_successors(&self, socket_addr: A, peer_addr: A) -> crate::Result<Vec<A>> {
+    pub fn get_successors(&self, socket_addr: A, peer_addr: A) -> crate::Result<Vec<IdentifierValue<A>>> {
         debug!("Getting successors of peer {}", peer_addr);
 
         let mut con = C::open(peer_addr, self.timeout)?;
@@ -153,11 +153,19 @@ impl<C: ConnectionTrait<Address = A>, A: PeerAddr> Procedures<C, A> {
                 }
             }
 
-            Ok(successors.take(4).collect())
+            Ok(successors.take(4).map(IdentifierValue::new).collect())
         } else {
             warn!("No successors received from peer {}", peer_addr);
 
             Err(Box::new(MessageError::new(msg)))
+        }
+    }
+
+    pub fn send_successor_changes(&self, socket_addr: A, old_successors: Vec<A>, new_successors: Vec<A>) {
+        let connect = C::open(socket_addr, self.timeout);
+        let reply = Message::SuccessorlistChanges(SuccessorListChanges { old_successors, new_successors });
+        if let Err(_) = connect.and_then(|mut con| con.send(reply)) {
+            info!("Failed to update own successors {}", socket_addr);
         }
     }
 }

@@ -71,6 +71,7 @@ use crate::handler::{ApiHandler, P2PHandler};
 use crate::network::ConnectionTrait;
 use crate::network::{PeerAddr, Server};
 use crate::routing::Routing;
+use crate::handler::Storage;
 use crate::stabilization::{Bootstrap, Stabilization};
 use std::error::Error;
 use std::fmt::Display;
@@ -133,8 +134,9 @@ where
         };
 
         let routing = Arc::new(Mutex::new(routing));
+        let storage = Arc::new(Mutex::new(Storage::new()));
 
-        let p2p_handler = Arc::new(P2PHandler::new(Arc::clone(&routing)));
+        let p2p_handler = Arc::new(P2PHandler::new(Arc::clone(&routing), Arc::clone(&storage)));
         let api_handler = Arc::new(ApiHandler::new(Arc::clone(&routing), config.timeout));
 
         Ok(Peer {
