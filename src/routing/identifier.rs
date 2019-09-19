@@ -16,7 +16,7 @@
 
 use crate::storage::Key;
 use bigint::U256;
-use ring::digest;
+use sha2::{Sha256, Digest};
 use std::fmt;
 use std::net::{SocketAddr, SocketAddrV4, SocketAddrV6};
 use std::ops::Deref;
@@ -54,8 +54,9 @@ impl Identifier {
     }
 
     fn generate(bytes: &[u8]) -> Self {
-        let dig = digest::digest(&digest::SHA256, bytes);
-        Self::new(dig.as_ref())
+        let mut hasher = Sha256::new();
+        hasher.input(bytes);
+        Self::new(&hasher.result())
     }
 
     /// Returns whether this identifier is between `first` and `second` on the

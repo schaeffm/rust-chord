@@ -63,7 +63,7 @@ extern crate byteorder;
 extern crate ini;
 #[macro_use]
 extern crate log;
-extern crate ring;
+extern crate sha2;
 extern crate threadpool;
 
 use crate::config::Config;

@@ -8,7 +8,7 @@ edition = "2018"
 bigint = { version = "4.4.1", features = ["std"] }
 byteorder = "1.3.1"
 log = "0.4.6"
-ring = "0.14.6"
+sha2 = "0.8.0"
 rust-ini = "0.13.0"
 stderrlog = "0.4.1"
 structopt = "0.2.15"
