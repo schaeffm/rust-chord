@@ -84,7 +84,7 @@ pub enum Message<A> {
     /// Request a peer's successor list.
     SuccessorsRequest(),
     /// Request to `SUCCESSORS REQUEST` with the successor list.
-    SuccessorsReply(SuccessorsReply),
+    SuccessorsReply(SuccessorsReply<A>),
 }
 
 impl Message<SocketAddr> {

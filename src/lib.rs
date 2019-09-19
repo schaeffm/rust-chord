@@ -67,6 +67,7 @@ extern crate ring;
 extern crate threadpool;
 
 use crate::config::Config;
+use crate::routing::identifier::Identifier;
 use crate::handler::{ApiHandler, P2PHandler};
 use crate::network::ConnectionTrait;
 use crate::network::{PeerAddr, Server};
@@ -205,14 +206,17 @@ where
 impl<C: ConnectionTrait<Address = A>, A: PeerAddr + Display + Sync> Display for Peer<C, A> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let routing = self.routing.lock().unwrap();
-        let addr = *routing.current;
-        let pred = routing.predecessor;
-        let succ = &routing.successor;
+        let addr: A = *routing.current;
+        let pred = match routing.predecessor {
+            None => "None".to_string(),
+            Some (p) => p.to_string(),
+        };
+        let succ: Vec<A> = routing.successor.iter().map(|x| **x).collect();
         let fingers: Vec<A> = routing.finger_table.clone().into_iter().map(|x| *x).collect();
         write!(f,
-               "Peer {:?}\n\
-               Predecessor: {:?}\n\
-               Successor: {:?}\n\
+               "Peer {}\n\
+               Predecessor: {}\n\
+               Successors: {:?}\n\
                Fingers: {:?}\n",
                addr, pred, succ, fingers)
     }

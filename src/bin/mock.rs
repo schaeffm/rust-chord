@@ -79,7 +79,10 @@ impl std::fmt::Debug for MockAddr {
 
 impl std::fmt::Display for MockAddr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self)
+        match self {
+            MockAddr::P2PAddr(addr) => write!(f, "{}", addr),
+            MockAddr::ApiAddr(addr) => write!(f, "ApiAddr {}", addr),
+        }
     }
 }
 
@@ -108,7 +111,8 @@ impl ConnectionTrait for MockConn {
     }
 
     fn receive(&mut self) -> Result<Message<Self::Address>> {
-        Ok(self.receiver.recv_timeout(Duration::from_millis(1000))?)
+        //Ok(self.receiver.recv_timeout(Duration::from_millis(1000))?)
+        Ok(self.receiver.recv()?)
     }
 
     fn send(&mut self, msg: Message<Self::Address>) -> Result<()> {
@@ -172,7 +176,7 @@ fn main() {
 
     let mut peers = HashMap::new();
     peers.insert(1, create(1));
-    peers.insert(2, join(2, 1));
+    //peers.insert(2, join(2, 1));
 
     println!("Client to talk to the DHT Mock App");
     println!("-----------------------------\n");
@@ -290,7 +294,7 @@ fn handle_get_impl() -> Result<()> {
         Message::DhtSuccess(dht_success) => {
             let key = std::str::from_utf8(&dht_success.key)?;
             let value = std::str::from_utf8(&dht_success.value)?;
-            println!("Received value for key {}:\n\n{}", key, value);
+            println!("Received value for key {}: {}", key, value);
         }
         Message::DhtFailure(dht_failure) => {
             let key = std::str::from_utf8(&dht_failure.key)?;

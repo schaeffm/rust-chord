@@ -125,8 +125,8 @@ pub struct SuccessorsRequest {}
 /// [`SuccessorsRequest`]: struct.SuccessorsRequest.html
 /// [`SuccessorsReply`]: struct.SuccessorsReply.html
 #[derive(Debug, PartialEq)]
-pub struct SuccessorsReply {
-    pub successors: Vec<SocketAddr>,
+pub struct SuccessorsReply<A> {
+    pub successors: Vec<A>,
 }
 
 impl MessagePayload for StorageGet {
@@ -367,12 +367,13 @@ impl MessagePayload for PredecessorFound<SocketAddr> {
     }
 }
 
-impl MessagePayload for SuccessorsReply {
+impl MessagePayload for SuccessorsReply<SocketAddr> {
     fn parse(reader: &mut dyn Read) -> io::Result<Self> {
         let mut successors = Vec::new();
 
-        // TODO: Variable size of successors list
-        for _ in 0..4 {
+        let length = reader.read_u8()?;
+
+        for _ in 0..length {
             let mut ip_arr = [0; 16];
             reader.read_exact(&mut ip_arr)?;
 
@@ -394,6 +395,8 @@ impl MessagePayload for SuccessorsReply {
     }
 
     fn write_to(&self, writer: &mut dyn Write) -> io::Result<()> {
+        writer.write_u8(self.successors.len() as u8);
+
         for socket_addr in &self.successors {
             let ip_address = match socket_addr.ip() {
                 IpAddr::V4(ipv4) => ipv4.to_ipv6_mapped(),

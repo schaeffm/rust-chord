@@ -53,6 +53,10 @@ impl<T: Identify + Copy + Clone> Routing<T> {
         self.predecessor = Some(IdentifierValue::new(new_pred)); // FIXME?
     }
 
+    pub fn set_successors(&mut self, new_succs: Vec<T>) {
+        self.successor = new_succs.into_iter().map(IdentifierValue::new).collect();
+    }
+
     /// Sets the current successor.
     pub fn set_successor(&mut self, new_succ: T) {
         self.successor[0] = IdentifierValue::new(new_succ);
@@ -83,21 +87,15 @@ impl<T: Identify + Copy + Clone> Routing<T> {
 
     /// Returns the peer closest to the given identifier.
     pub fn closest_preceding_peer(&self, identifier: Identifier) -> &IdentifierValue<T> {
-        //if self.responsible_for(identifier) {
-        //    return &self.current;
-        //}
-
-        let diff = identifier - self.current.identifier();
-        let zeros = diff.leading_zeros() as usize;
-
-        match self.finger_table.get(zeros) {
-            Some(entry) if entry.identifier() != self.current.identifier() => entry,
-            _ => self.successor.first().unwrap(),
+        for finger in &self.finger_table {
+            if finger.identifier().is_between(&self.current.identifier(), &identifier) {
+                return finger
+            }
         }
+        return self.successor.first().unwrap();
     }
 
     pub fn preds_consistent(mut peers: Vec<Self>) -> bool {
-
         /*
         let len = peers.len();
         peers.sort_by(|a, b| a.current.identifier().cmp(&b.current.identifier()));

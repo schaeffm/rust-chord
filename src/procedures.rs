@@ -1,11 +1,11 @@
 //! A collection of procedures used in various places.
 
 use crate::error::MessageError;
-use crate::message::p2p::{PeerFind, PredecessorNotify, StorageGet, StoragePut};
+use crate::message::p2p::{PeerFind, PredecessorNotify, StorageGet, StoragePut, SuccessorsRequest};
 use crate::message::Message;
 use crate::network::ConnectionTrait;
 use crate::network::PeerAddr;
-use crate::routing::identifier::Identifier;
+use crate::routing::identifier::{Identifier, IdentifierValue};
 use crate::storage::Key;
 use std::marker::PhantomData;
 use std::sync::Mutex;
@@ -29,13 +29,11 @@ impl<C: ConnectionTrait<Address = A>, A: PeerAddr> Procedures<C, A> {
 
     /// Get the socket address of the peer responsible for a given identifier.
     ///
-    /// This iteratively sends PEER FIND messages to successive peers,
+    /// The lookup is implemented recursively via PEER FIND messages,
     /// beginning with `peer_addr` which could be taken from a finger table.
     pub fn find_peer(&self, identifier: Identifier, peer_addr: A) -> crate::Result<A> {
         debug!("Finding peer for identifier {}", identifier);
-
         // TODO use successors from list if PeerNotFound
-        //loop {
             let mut con = C::open(peer_addr, self.timeout)?;
             let peer_find = PeerFind { identifier };
             con.send(Message::PeerFind(peer_find))?;
@@ -51,20 +49,6 @@ impl<C: ConnectionTrait<Address = A>, A: PeerAddr> Procedures<C, A> {
             } else {
                 Err(Box::new(MessageError::new(msg)))
             }
-
-        /*
-            if reply_addr == peer_addr {
-                debug!(
-                    "Peer found for identifier {} with address {}",
-                    identifier, reply_addr
-                );
-
-                return Ok(reply_addr);
-            }
-        */
-
-            //peer_addr = reply_addr;
-        //}
     }
 
     /// Send a storage get message to a peer with the objective to find a value for a given key.
@@ -159,6 +143,26 @@ impl<C: ConnectionTrait<Address = A>, A: PeerAddr> Procedures<C, A> {
             Ok(predecessor_reply.socket_addr)
         } else {
             warn!("No predecessor received from peer {}", peer_addr);
+
+            Err(Box::new(MessageError::new(msg)))
+        }
+    }
+
+    pub fn get_successors(&self, socket_addr: A, peer_addr: A) -> crate::Result<Vec<A>> {
+        debug!("Getting successors of peer {}", peer_addr);
+
+        let mut con = C::open(peer_addr, self.timeout)?;
+
+        con.send(Message::SuccessorsRequest())?;
+
+        let msg = con.receive()?;
+
+        if let Message::SuccessorsReply(successors_reply) = msg {
+            info!("Successors received from peer {}", peer_addr);
+
+            Ok(successors_reply.successors)
+        } else {
+            warn!("No successors received from peer {}", peer_addr);
 
             Err(Box::new(MessageError::new(msg)))
         }

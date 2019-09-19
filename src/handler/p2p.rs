@@ -48,7 +48,7 @@ impl<A: PeerAddr> P2PHandler<A> {
         if let Some(old_predecessor_addr) = routing.predecessor {
             // 1. check if the predecessor is closer than the previous predecessor
             if predecessor_addr.identifier().is_between(&old_predecessor_addr.identifier(), &routing.current.identifier()) {
-            //if routing.responsible_for(predecessor_addr.identifier()) {
+                //if routing.responsible_for(predecessor_addr.identifier()) {
                 // 2. update the predecessor if necessary
                 routing.set_predecessor(predecessor_addr);
 
@@ -96,7 +96,7 @@ impl<A: PeerAddr> P2PHandler<A> {
         true
     }
 
-    fn handle_storage_get<C: ConnectionTrait<Address = A>>(
+    fn handle_storage_get<C: ConnectionTrait<Address=A>>(
         &self,
         mut con: C,
         storage_get: StorageGet,
@@ -114,33 +114,33 @@ impl<A: PeerAddr> P2PHandler<A> {
         // 1. check if given key falls into range
         // FIXME?
         //if self.responsible_for(key.identifier()) {
-            // 2. find value for given key
-            let value_opt = self.get_from_storage(key);
+        // 2. find value for given key
+        let value_opt = self.get_from_storage(key);
 
-            let msg = if let Some(value) = value_opt {
-                info!(
-                    "Found value for key {} and replying with STORAGE GET SUCCESS",
-                    key
-                );
+        let msg = if let Some(value) = value_opt {
+            info!(
+                "Found value for key {} and replying with STORAGE GET SUCCESS",
+                key
+            );
 
-                Message::StorageGetSuccess(StorageGetSuccess { raw_key, value })
-            } else {
-                info!(
-                    "Did not find value for key {} and replying with STORAGE FAILURE",
-                    key
-                );
+            Message::StorageGetSuccess(StorageGetSuccess { raw_key, value })
+        } else {
+            info!(
+                "Did not find value for key {} and replying with STORAGE FAILURE",
+                key
+            );
 
-                Message::StorageFailure(StorageFailure { raw_key })
-            };
+            Message::StorageFailure(StorageFailure { raw_key })
+        };
 
-            // 3. reply with STORAGE GET SUCCESS or STORAGE FAILURE
-            con.send(msg)?;
+        // 3. reply with STORAGE GET SUCCESS or STORAGE FAILURE
+        con.send(msg)?;
         //}
 
         Ok(())
     }
 
-    fn handle_storage_put<C: ConnectionTrait<Address = A>>(
+    fn handle_storage_put<C: ConnectionTrait<Address=A>>(
         &self,
         mut con: C,
         storage_put: StoragePut,
@@ -158,33 +158,33 @@ impl<A: PeerAddr> P2PHandler<A> {
         // 1. check if given key falls into range
         // FIXME?
         //if self.responsible_for(key.identifier()) {
-            // 2. save value for given key
-            let msg = if self.put_to_storage(key, storage_put.value) {
-                info!(
-                    "Stored value for key {} and replying with STORAGE PUT SUCCESS",
-                    key
-                );
+        // 2. save value for given key
+        let msg = if self.put_to_storage(key, storage_put.value) {
+            info!(
+                "Stored value for key {} and replying with STORAGE PUT SUCCESS",
+                key
+            );
 
-                Message::StoragePutSuccess(StoragePutSuccess { raw_key })
-            } else {
-                info!(
-                    "Value for key {} already exists, thus replying with STORAGE FAILURE",
-                    key
-                );
+            Message::StoragePutSuccess(StoragePutSuccess { raw_key })
+        } else {
+            info!(
+                "Value for key {} already exists, thus replying with STORAGE FAILURE",
+                key
+            );
 
-                Message::StorageFailure(StorageFailure { raw_key })
-            };
+            Message::StorageFailure(StorageFailure { raw_key })
+        };
 
-            // 3. reply with STORAGE PUT SUCCESS or STORAGE FAILURE
-            con.send(msg)?;
+        // 3. reply with STORAGE PUT SUCCESS or STORAGE FAILURE
+        con.send(msg)?;
         //}
 
         Ok(())
     }
 
     fn handle_peer_find<C>(&self, mut con: C, peer_find: PeerFind) -> crate::Result<()>
-    where
-        C: ConnectionTrait<Address = A>,
+        where
+            C: ConnectionTrait<Address=A>,
     {
         let current = self.routing.lock().unwrap().current.clone();
         let successor = self.routing.lock().unwrap().successor.first().unwrap().clone();
@@ -206,7 +206,7 @@ impl<A: PeerAddr> P2PHandler<A> {
         } else {
             // get closest preceding peer to send a PeerFind request
             let peer_addr = self.closest_preceding_peer(identifier);
-
+            //println!("next for {:?}: {:?}", identifier, peer_addr);
             let mut new_con = C::open(peer_addr, 3600)?;
             let peer_find = PeerFind { identifier };
             new_con.send(Message::PeerFind(peer_find))?;
@@ -232,13 +232,33 @@ impl<A: PeerAddr> P2PHandler<A> {
         Ok(())
     }
 
+    fn handle_successors_request<C>(
+        &self,
+        mut con: C) -> crate::Result<()>
+        where
+            C: ConnectionTrait<Address=A>, {
+        let routing = self.routing.lock().unwrap();
+        let mut successors = routing.successor.iter().map(|x| **x).collect();
+        let mut successors_pred = match routing.predecessor {
+            None => vec![],
+            Some(p) => vec![*p],
+        };
+        successors_pred.push(*routing.current);
+        successors_pred.append(&mut successors);
+        let successor_reply = SuccessorsReply{
+            successors: successors_pred };
+        con.send(Message::SuccessorsReply(successor_reply))?;
+
+        Ok(())
+    }
+
     fn handle_predecessor_notify<C>(
         &self,
         mut con: C,
         predecessor_notify: PredecessorNotify<A>,
     ) -> crate::Result<()>
-    where
-        C: ConnectionTrait<Address = A>,
+        where
+            C: ConnectionTrait<Address=A>,
     {
         let predecessor_addr = predecessor_notify.socket_addr;
 
@@ -266,8 +286,8 @@ impl<A: PeerAddr> P2PHandler<A> {
     }
 
     fn handle_connection<C>(&self, mut con: C) -> crate::Result<()>
-    where
-        C: ConnectionTrait<Address = A>,
+        where
+            C: ConnectionTrait<Address=A>,
     {
         let msg = con.receive()?;
 
@@ -277,6 +297,7 @@ impl<A: PeerAddr> P2PHandler<A> {
             Message::StorageGet(storage_get) => self.handle_storage_get(con, storage_get),
             Message::StoragePut(storage_put) => self.handle_storage_put(con, storage_put),
             Message::PeerFind(peer_find) => self.handle_peer_find(con, peer_find),
+            Message::SuccessorsRequest() => self.handle_successors_request(con),
             Message::PredecessorNotify(predecessor_get) => {
                 self.handle_predecessor_notify(con, predecessor_get)
             }
@@ -290,9 +311,9 @@ impl<A: PeerAddr> P2PHandler<A> {
 }
 
 impl<A, C> ServerHandler<C> for P2PHandler<A>
-where
-    C: ConnectionTrait<Address = A>,
-    A: PeerAddr,
+    where
+        C: ConnectionTrait<Address=A>,
+        A: PeerAddr,
 {
     fn handle_connection(&self, connection: C) {
         if let Err(err) = P2PHandler::handle_connection(&self, connection) {

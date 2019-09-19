@@ -16,9 +16,9 @@ use std::sync::Mutex;
 
 /// Basic information needed to connect to the network using a bootstrap peer
 pub struct Bootstrap<C, A>
-where
-    C: ConnectionTrait<Address = A>,
-    A: PeerAddr,
+    where
+        C: ConnectionTrait<Address=A>,
+        A: PeerAddr,
 {
     current_addr: A,
     boot_addr: A,
@@ -26,7 +26,7 @@ where
     p: PhantomData<C>,
 }
 
-impl<A: PeerAddr, C: ConnectionTrait<Address = A>> Bootstrap<C, A> {
+impl<A: PeerAddr, C: ConnectionTrait<Address=A>> Bootstrap<C, A> {
     /// Initializes the bootstrap algorithm by providing the peer's own address,
     /// the address of a bootstrapping peer and the number of fingers that
     /// should be stored.
@@ -50,7 +50,7 @@ impl<A: PeerAddr, C: ConnectionTrait<Address = A>> Bootstrap<C, A> {
         let current_id = self.current_addr.identifier();
 
         let successor = procedures.find_peer(current_id, self.boot_addr)?;
-        let predecessor = procedures.notify_predecessor(self.current_addr, self.boot_addr)?;
+        let predecessor = procedures.notify_predecessor(self.current_addr, successor)?;
         let finger_table = vec![self.current_addr; self.fingers];
 
         Ok(Routing::new(
@@ -66,15 +66,15 @@ impl<A: PeerAddr, C: ConnectionTrait<Address = A>> Bootstrap<C, A> {
 ///
 /// [`Routing`]: ../routing/struct.Routing.html
 pub struct Stabilization<C, A>
-where
-    C: ConnectionTrait<Address = A>,
-    A: PeerAddr,
+    where
+        C: ConnectionTrait<Address=A>,
+        A: PeerAddr,
 {
     procedures: Procedures<C, A>,
     routing: Arc<Mutex<Routing<A>>>,
 }
 
-impl<C: ConnectionTrait<Address = A>, A: PeerAddr> Stabilization<C, A> {
+impl<C: ConnectionTrait<Address=A>, A: PeerAddr> Stabilization<C, A> {
     /// Initializes the stabilization struct with a routing object and the connection timeout.
     pub fn new(routing: Arc<Mutex<Routing<A>>>, timeout: u64) -> Self {
         let procedures = Procedures::new(timeout);
@@ -95,14 +95,46 @@ impl<C: ConnectionTrait<Address = A>, A: PeerAddr> Stabilization<C, A> {
     pub fn stabilize(&mut self) -> crate::Result<()> {
         info!("Stabilizing routing information");
 
-        let update_successor = self.update_successor();
+        let update_successors = self.update_successors();
+        //println!("Peer {:?} done updating succ", *self.routing.lock().unwrap().current);
+        //println!("Current routing information:\n\n{:#?}", *self.routing.lock().unwrap());
         let update_fingers = self.update_fingers();
 
         let routing = self.routing.lock().unwrap();
 
         debug!("Current routing information:\n\n{:#?}", *routing);
+        //println!("Peer {:?} done stabilizing", *routing.current);
+        update_successors.and(update_fingers)
+    }
 
-        update_successor.and(update_fingers)
+
+    fn update_successors(&self) -> crate::Result<()> {
+        let (current, successors) = {
+            let routing = self.routing.lock().unwrap();
+            (routing.current, routing.successor.clone())
+        };
+
+        //let successor = successors.first().unwrap();
+        //println!("succs{:?}", successors);
+        //TODO: move to procedures
+        let (succ, mut candidates): (A, Vec<A>) = successors
+            .iter()
+            .map(|succ| (**succ, self.procedures.get_successors(*current, **succ)))
+            .filter(|(_, succs)| succs.is_ok())
+            .map(|(succ, succs)| (succ, succs.unwrap()))
+            .next()
+            .unwrap();
+
+        let mut candidates = candidates.into_iter().peekable();
+        if let Some(fst) = &candidates.peek() {
+            if !fst.identifier().is_between_end(&current.identifier(), &succ.identifier()) {
+                candidates.next();
+            }
+        }
+
+        let mut succ_successors: Vec<A> = candidates.take(4).collect::<Vec<A>>();
+        self.routing.lock().unwrap().set_successors(succ_successors);
+        Ok(())
     }
 
     fn update_successor(&self) -> crate::Result<()> {
