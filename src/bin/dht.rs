@@ -11,6 +11,7 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::process;
 use structopt::StructOpt;
+use std::sync::mpsc::channel;
 
 #[derive(StructOpt, Debug)]
 #[structopt(
@@ -59,8 +60,11 @@ fn main() {
 
     // TODO init logger with verbosity flag
 
+    // TODO: quit?
+    let (tx, rx) = channel();
+
     let peer = Peer::<Connection, SocketAddr>::create(config);
-    if let Err(e) = peer.unwrap().run(opt.bootstrap) {
+    if let Err(e) = peer.unwrap().run(opt.bootstrap, rx) {
         error!("Application error: {}", e);
         process::exit(1);
     }

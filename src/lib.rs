@@ -77,6 +77,7 @@ use std::fmt::Display;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
+use std::sync::mpsc::{channel, Receiver};
 
 pub mod config;
 pub mod error;
@@ -146,13 +147,17 @@ where
         })
     }
 
-    pub fn run(&self, bootstrap: Option<A>) -> Result<()> {
+    pub fn run(&self, bootstrap: Option<A>, rx_peer: Receiver<()>) -> Result<()> {
         info!("Distributed Hash Table based on CHORD");
         info!("-------------------------------------\n");
         debug!(
             "The current configuration is as follows.\n\n{:#?}\n",
             self.config
         );
+
+        let (tx_p2p, rx_p2p) = channel();
+        let (tx_api, rx_api) = channel();
+        let (tx_sta, rx_sta) = channel();
 
         let config = self.config;
 
@@ -167,20 +172,29 @@ where
 
         let p2p_server: Server<P2PHandler<C, A>>= Server::from_arc(&self.p2p_handler);
         //let p2p_server = Server::new(Arc::clone(&self.p2p_handler));
-        let p2p_handle = p2p_server.listen(config.listen_address, config.worker_threads)?;
+        let p2p_handle = p2p_server.listen(config.listen_address, config.worker_threads, rx_p2p)?;
 
         let api_server: Server<ApiHandler<C, A>> = Server::from_arc(&self.api_handler);
-        let api_handle = api_server.listen(config.api_address, 1)?;
+        let api_handle = api_server.listen(config.api_address, 1, rx_api)?;
 
         let mut stabilization: Stabilization<C, A> =
             Stabilization::new(Arc::clone(&self.routing), config.timeout);
         let stabilization_handle = thread::spawn(move || loop {
+            if rx_sta.try_recv().is_ok() {
+                break;
+            }
+
             if let Err(err) = stabilization.stabilize() {
                 error!("Error during stabilization:\n\n{:?}", err);
             }
 
             thread::sleep(Duration::from_secs(config.stabilization_interval));
         });
+
+        rx_peer.recv().unwrap();
+        tx_p2p.send(()).unwrap();
+        tx_api.send(()).unwrap();
+        tx_sta.send(()).unwrap();
 
         if let Err(err) = p2p_handle.join() {
             error!("Error joining p2p handler:\n\n{:?}", err);

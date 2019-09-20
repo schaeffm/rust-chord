@@ -18,6 +18,7 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 use threadpool::ThreadPool;
+use std::sync::mpsc::Receiver;
 
 const MAX_MESSAGE_SIZE: usize = 64000;
 
@@ -65,6 +66,7 @@ where
     fn shutdown(self) -> Result<()>;
     fn bind(addr: Self::Address) -> Result<Self::Listener>;
     fn listen<'a>(listener: &'a Self::Listener) -> Box<dyn 'a + Iterator<Item = Self>>;
+    fn accept<'a>(listener: &'a Self::Listener) -> Result<Self>;
 }
 
 impl ConnectionTrait for Connection {
@@ -132,7 +134,13 @@ impl ConnectionTrait for Connection {
     }
 
     fn bind(addr: Self::Address) -> Result<Self::Listener> {
-        Ok(TcpListener::bind(addr)?)
+        let listener = TcpListener::bind(addr)?;
+        listener.set_nonblocking(true).expect("Cannot set non-blocking");
+        Ok(listener)
+    }
+
+    fn accept<'a>(listener: &'a Self::Listener) -> Result<Self> {
+        Ok(Connection::from_stream(listener.accept()?.0))
     }
 }
 
@@ -347,6 +355,7 @@ impl<T: Send + Sync + 'static> Server<T> {
         self,
         addr: A,
         num_workers: usize,
+        channel: Receiver<()>,
     ) -> Result<thread::JoinHandle<()>>
     where
         T: ServerHandler<C>,
@@ -358,11 +367,18 @@ impl<T: Send + Sync + 'static> Server<T> {
         let handle = thread::spawn(move || {
             let pool = ThreadPool::new(num_workers);
 
-            for con in C::listen(&listener) {
-                let handler = Arc::clone(&self.handler);
-                pool.execute(move || {
-                    handler.handle_connection(con);
-                });
+            loop {
+                if channel.try_recv().is_ok() {
+                    break;
+                }
+
+                if let Ok(con) = C::accept(&listener) {
+                        // do something with the TcpStream
+                        let handler = Arc::clone(&self.handler);
+                        pool.execute(move || {
+                            handler.handle_connection(con);
+                        });
+                }
             }
         });
 

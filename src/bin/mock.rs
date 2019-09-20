@@ -138,17 +138,26 @@ impl ConnectionTrait for MockConn {
             MockConn { sender, receiver }
         }))
     }
+
+    fn accept<'a>(listener: &'a Self::Listener) -> Result<Self> {
+        let (receiver, sender_ch) = listener.try_recv()?;
+        let (sender, receiver_peer) = channel();
+        sender_ch.send(receiver_peer).ok();
+        Ok(MockConn { sender, receiver })
+    }
 }
 
-fn join(addr: u64, bootstrap: u64) -> Arc<Peer<MockConn, MockAddr>> {
+fn join(addr: u64, bootstrap: u64) -> (Sender<()>, Arc<Peer<MockConn, MockAddr>>) {
     create_peer(addr, Some(MockAddr::P2PAddr(bootstrap)))
 }
 
-fn create(addr: u64) -> Arc<Peer<MockConn, MockAddr>> {
+fn create(addr: u64) -> (Sender<()>, Arc<Peer<MockConn, MockAddr>>) {
     create_peer(addr, None)
 }
 
-fn create_peer(addr: u64, bootstrap: Option<MockAddr>) -> Arc<Peer<MockConn, MockAddr>> {
+fn create_peer(addr: u64, bootstrap: Option<MockAddr>) -> (Sender<()>, Arc<Peer<MockConn, MockAddr>>) {
+    let (tx, rx) = channel();
+
     let config = Config {
         listen_address: MockAddr::P2PAddr(addr),
         api_address: MockAddr::ApiAddr(addr),
@@ -162,20 +171,25 @@ fn create_peer(addr: u64, bootstrap: Option<MockAddr>) -> Arc<Peer<MockConn, Moc
     {
         let peer = peer.clone();
         thread::spawn(move || {
-            if let Err(e) = peer.run(bootstrap) {
+            if let Err(e) = peer.run(bootstrap, rx) {
                 error!("Application error: {}", e);
                 process::exit(1);
             }
         });
     }
-    peer
+
+    (tx, peer)
 }
 
 fn main() {
     stderrlog::new().module(module_path!()).quiet(false).verbosity(2).init().unwrap();
 
     let mut peers = HashMap::new();
-    peers.insert(1, create(1));
+    let mut channels = HashMap::new();
+
+    let (channel, peer) =  create(1);
+    peers.insert(1, peer);
+    channels.insert(1, channel);
     //peers.insert(2, join(2, 1));
 
     println!("Client to talk to the DHT Mock App");
@@ -190,7 +204,8 @@ fn main() {
             "put" => handle_put(),
             "get" => handle_get(),
             "inspect" => handle_inspect(&peers),
-            "join" => handle_join(&mut peers),
+            "join" => handle_join(&mut peers, &mut channels),
+            "kill" => handle_kill(&mut peers, &mut channels),
             _ => handle_help(),
         }
     }
@@ -306,19 +321,46 @@ fn handle_get_impl() -> Result<()> {
 }
 
 
-fn handle_join(peers: &mut HashMap<u64, Arc<Peer<MockConn, MockAddr>>>) {
-    if let Err(e) = handle_join_impl(peers) {
+fn handle_join(peers: &mut HashMap<u64, Arc<Peer<MockConn, MockAddr>>>, channels: &mut HashMap<u64, Sender<()>>) {
+    if let Err(e) = handle_join_impl(peers, channels) {
         println!("{}", e);
     }
 }
 
-fn handle_join_impl(peers: &mut HashMap<u64, Arc<Peer<MockConn, MockAddr>>>) -> Result<()> {
+fn handle_join_impl(peers: &mut HashMap<u64, Arc<Peer<MockConn, MockAddr>>>, channels: &mut HashMap<u64, Sender<()>>) -> Result<()> {
     let addr = read_line("Address of the new peer?").unwrap().parse::<u64>()?;
     let bootstrap = read_line("Address of the bootstrap peer?").unwrap().parse::<u64>()?;
 
     let peer = join(addr, bootstrap);
-    peers.insert(addr, peer);
+
+    peers.insert(addr, peer.1);
+    channels.insert(addr, peer.0);
+
     Ok(())
+}
+
+
+fn handle_kill(peers: &mut HashMap<u64, Arc<Peer<MockConn, MockAddr>>>, channels: &mut HashMap<u64, Sender<()>>) {
+    if let Err(e) = handle_kill_impl(peers, channels) {
+        println!("{}", e);
+    }
+}
+
+
+fn handle_kill_impl(peers: &mut HashMap<u64, Arc<Peer<MockConn, MockAddr>>>, channels: &mut HashMap<u64, Sender<()>>) -> Result<()> {
+    let addr = read_line("Address of the peer to kill?").unwrap().parse::<u64>()?;
+
+    channels.get(&addr).ok_or("Peer not in network")?.send(())?;
+
+    channels.remove(&addr);
+    peers.remove(&addr);
+
+    Ok(())
+    /*
+    if let Err(e) = handle_join_impl(peers) {
+        println!("{}", e);
+    }
+    */
 }
 
 fn _handle_consistency(peers: &HashMap<u64, Arc<Peer<MockConn, MockAddr>>>) {
