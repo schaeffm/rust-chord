@@ -126,7 +126,6 @@ impl<C: ConnectionTrait<Address=A>, A: PeerAddr> Stabilization<C, A> {
 
         let ids_old = successors.iter().map(|i| **i).collect();
         let ids_new = new_successors.iter().map(|i| **i).collect();
-
         self.procedures.send_successor_changes(*current, ids_old, ids_new);
 
         self.routing.lock().unwrap().set_successors(new_successors);

@@ -50,7 +50,7 @@ impl<A: PeerAddr, C: ConnectionTrait<Address = A>> ApiHandler<C, A> {
     fn handle_dht_get(&self, mut api_con: C, dht_get: DhtGet) -> crate::Result<()> {
         // iterate through all replication indices
         // TODO: use replication index
-        for i in 0..u8::MAX {
+        for i in 0..1 {
             let key = Key {
                 raw_key: dht_get.key,
                 replication_index: i,
@@ -76,7 +76,7 @@ impl<A: PeerAddr, C: ConnectionTrait<Address = A>> ApiHandler<C, A> {
 
     fn handle_dht_put(&self, _con: C, dht_put: DhtPut) -> crate::Result<()> {
         // iterate through all replication indices
-        for i in 0..=dht_put.replication {
+        for i in 0..1 {
             let key = Key {
                 raw_key: dht_put.key,
                 replication_index: i,

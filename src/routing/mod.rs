@@ -95,7 +95,21 @@ impl<T: Identify + Copy + Clone> Routing<T> {
 
     pub fn last_successor(&self) -> Option<&IdentifierValue<T>> {
         // TODO: do not hardcode 4 here
-        return self.successor.get(3);
+        if let Some(last) = self.successor.get(3) {
+            if last.identifier() == self.current.identifier() {
+                return None;
+            }
+            if let Some ((fst_index, _)) = self.successor
+                .iter()
+                .enumerate()
+                .find(|(i, x)| x.identifier() == last.identifier()) {
+                if fst_index == 3 {
+                    return Some(last)
+                }
+            }
+        }
+
+        return None
     }
 
     pub fn preds_consistent(_peers: Vec<Self>) -> bool {

@@ -12,6 +12,7 @@ use std::collections::HashSet;
 use std::iter::FromIterator;
 use std::marker::PhantomData;
 use crate::procedures::Procedures;
+use std::fmt::Display;
 
 type Storage = HashMap<Identifier, Vec<u8>>;
 
@@ -60,21 +61,32 @@ impl<C, A> P2PHandler<C, A> where
             (routing.predecessor, routing.current)
         };
 
-        if self.routing.lock().unwrap().get_predecessor_failed() {
+        let failed = self.routing.lock().unwrap().get_predecessor_failed();
+        if failed && predecessor.identifier() == current.identifier() {
+            self.routing.lock().unwrap().set_predecessor(new_predecessor);
+        } else if failed && predecessor.identifier().is_between(&new_predecessor.identifier(), &current.identifier()) {
             // old predecessor failed, we get a new predecessor:
             // keys in range (predecessor, new_predecessor) are redistributed from self to the
             // new predecessor (empty if new predecessor further away)
-            let new_pred_keys = self.key_range(&predecessor.identifier(), &new_predecessor.identifier());
-            self.put_keys(new_predecessor, &new_pred_keys);
+
+            //if predecessor.identifier() != current.identifier() {
+            let new_pred_keys = self.key_range(&new_predecessor.identifier(), &predecessor.identifier());
+
+            for succ in self.routing.lock().unwrap().successor.clone() {
+                println!("{} sends a put_keys message (pred failed) to {:?} containing {:?}", *current, succ, &new_pred_keys);
+                self.put_keys(*succ, &new_pred_keys);
+            }
+            //}
             self.routing.lock().unwrap().set_predecessor(new_predecessor);
         } else {
             let predecessor = self.routing.lock().unwrap().predecessor;
             if new_predecessor.identifier().is_between(&predecessor.identifier(), &current.identifier()) {
                 // node join -> set new predecessor
                 self.routing.lock().unwrap().set_predecessor(new_predecessor);
-                let new_pred_keys = self.key_range(&new_predecessor.identifier(), &predecessor.identifier());
+                let new_pred_keys = self.key_range(&predecessor.identifier(), &new_predecessor.identifier());
                 self.put_keys(new_predecessor, &new_pred_keys);
                 if let Some(last_succ) = self.routing.lock().unwrap().last_successor() {
+                    println!("{} sends a remove key message (pred changed) to {:?} containing {:?}", *current, **last_succ, &new_pred_keys);
                     self.remove_keys(**last_succ, &new_pred_keys);
                 }
             }
@@ -146,11 +158,8 @@ impl<C, A> P2PHandler<C, A> where
 
         info!("Received STORAGE PUT request for key {}", key);
 
-        // 1. check if given key falls into range
-        // FIXME?
-        //if self.responsible_for(key.identifier()) {
         // 2. save value for given key
-        let msg = if self.put_to_storage(key, storage_put.value) {
+        let msg = if self.put_to_storage(key, storage_put.value.clone()) {
             info!(
                 "Stored value for key {} and replying with STORAGE PUT SUCCESS",
                 key
@@ -168,7 +177,13 @@ impl<C, A> P2PHandler<C, A> where
 
         // 3. reply with STORAGE PUT SUCCESS or STORAGE FAILURE
         con.send(msg)?;
-        //}
+
+        let successors = self.routing.lock().unwrap().successor.clone();
+        if self.routing.lock().unwrap().responsible_for(key) {
+            for succ in successors {
+                self.procedures.put_value(*succ, key, storage_put.ttl, storage_put.value.clone())?;
+            }
+        }
 
         Ok(())
     }
@@ -283,6 +298,8 @@ impl<C, A> P2PHandler<C, A> where
         let old_successors_set: HashSet<_> = HashSet::from_iter(successor_changes.old_successors.iter().map(|i| *i).clone());
         let new_successors_set: HashSet<_> = HashSet::from_iter(successor_changes.new_successors.iter().map(|i| *i).clone());
 
+        let current = self.routing.lock().unwrap().current.clone();
+
         let own_keys: Vec<Identifier> = self.storage.lock().unwrap()
             .keys()
             .filter(|k| self.routing.lock().unwrap().responsible_for(**k))
@@ -291,12 +308,18 @@ impl<C, A> P2PHandler<C, A> where
 
         // all peers that are not in the successors list anymore
         for peer in old_successors_set.difference(&new_successors_set) {
-            self.remove_keys(*peer, &own_keys);
+            if peer.identifier() != current.identifier() {
+                println!("{} sends a remove key message (succs changed) to {:?} containing {:?}", *current, *peer, &own_keys);
+                self.remove_keys(*peer, &own_keys);
+            }
         }
 
         // all peers that are new in the successors list
         for peer in new_successors_set.difference(&old_successors_set) {
-            self.put_keys(*peer, &own_keys);
+            if peer.identifier() != current.identifier() {
+                println!("{} sends a put key message (succs changed) to {:?} containing {:?}", *current, *peer, &own_keys);
+                self.put_keys(*peer, &own_keys);
+            }
         }
 
         Ok(())
@@ -329,6 +352,8 @@ impl<C, A> P2PHandler<C, A> where
 
     fn handle_remove_keys(&self, remove_keys: KeyRemove) -> crate::Result<()> {
         let mut storage = self.storage.lock().unwrap();
+
+        println!("{} is going to remove {:?}", self.routing.lock().unwrap().current.identifier(), remove_keys);
 
         for key in remove_keys.keys {
             storage.remove(&key);
@@ -370,4 +395,43 @@ impl<A, C> ServerHandler<C> for P2PHandler<C, A>
     fn handle_error(&self, error: io::Error) {
         self.handle_error(&error)
     }
+}
+
+impl<C: ConnectionTrait<Address = A>, A: PeerAddr + Display + Sync> Display for P2PHandler<C, A> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let routing = self.routing.try_lock();
+        let storage = self.storage.try_lock();
+
+        match (routing, storage) {
+            (Ok(routing), Ok(storage)) => {
+                let addr = *routing.current;
+
+                let pred = *routing.predecessor;
+
+                let succ: Vec<_> = routing.successor.iter().map(|a| **a).collect();
+                let fingers: Vec<_> = routing.finger_table.iter().map(|a| **a).collect();
+                write!(f,
+               "Predecessor: {}\n\
+               Successors: {:?}\n\
+               Fingers: {:?}\n\
+               Storage: {}\n",
+                       pred, succ, fingers, display_storage(&storage))
+            }
+            _ => write!(f, "Peer locked...")
+        }
+    }
+}
+
+fn display_storage(storage: &Storage) -> String {
+    let mut tmp = String::new();
+
+    for (k, v) in storage.iter() {
+        let hex =  k.as_bytes()[..8].iter()
+            .map(|b| format!("{:02X}", b))
+            .collect::<Vec<_>>().join(":");
+
+        tmp.push_str(&format!("[{}..: {}], ", hex, std::str::from_utf8(v).unwrap()));
+    }
+
+    tmp
 }

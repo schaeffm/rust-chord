@@ -112,7 +112,7 @@ impl ConnectionTrait for MockConn {
 
     fn receive(&mut self) -> Result<Message<Self::Address>> {
         //Ok(self.receiver.recv_timeout(Duration::from_millis(1000))?)
-        Ok(self.receiver.recv()?)
+        Ok(self.receiver.recv_timeout(Duration::from_millis(1000))?)
     }
 
     fn send(&mut self, msg: Message<Self::Address>) -> Result<()> {
@@ -229,8 +229,8 @@ fn read_line(question: &str) -> Option<String> {
 fn handle_inspect_impl(peers: &HashMap<u64, Arc<Peer<MockConn, MockAddr>>>) -> Result<()> {
     let addr = read_line("Which peer?").unwrap();
     if addr == "all" {
-        for peer in peers.values() {
-            println!("{}", peer);
+        for (k,peer) in peers.iter() {
+            println!("Peer {}\n{}", k, peer);
         }
     } else {
         let addr = addr.parse::<u64>()?;
