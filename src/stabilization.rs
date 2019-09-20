@@ -142,9 +142,9 @@ impl<C: ConnectionTrait<Address = A>, A: PeerAddr> Stabilization<C, A> {
         info!("Update fingers");
 
         for i in 0..fingers {
-            // TODO do not hardcode for 256 bits here
+            // TODO: Use identifier size instead of hardcoded 255
             let identifier = current.identifier() + Identifier::with_bit(255 - i);
-            // FIXME: do not send message to current
+
             let peer = self.procedures.find_peer(identifier, *current)?;
 
             let mut routing = self.routing.lock().unwrap();

@@ -236,7 +236,6 @@ where
         } else {
             // get closest preceding peer to send a PeerFind request
             let peer_addr = self.closest_preceding_peer(identifier);
-            //println!("next for {:?}: {:?}", identifier, peer_addr);
             let mut new_con = C::open(peer_addr, 3600)?;
             let peer_find = PeerFind { identifier };
             new_con.send(Message::PeerFind(peer_find))?;
@@ -343,10 +342,6 @@ where
         // all peers that are not in the successors list anymore
         for peer in old_successors_set.difference(&new_successors_set) {
             if peer.identifier() != current.identifier() {
-                println!(
-                    "{} sends a remove key message (succs changed) to {:?} containing {:?}",
-                    *current, *peer, &own_keys
-                );
                 self.remove_keys(*peer, &own_keys);
             }
         }
@@ -354,10 +349,6 @@ where
         // all peers that are new in the successors list
         for peer in new_successors_set.difference(&old_successors_set) {
             if peer.identifier() != current.identifier() {
-                println!(
-                    "{} sends a put key message (succs changed) to {:?} containing {:?}",
-                    *current, *peer, &own_keys
-                );
                 self.put_keys(*peer, &own_keys);
             }
         }
@@ -390,12 +381,6 @@ where
     fn handle_remove_keys(&self, remove_keys: KeyRemove) -> crate::Result<()> {
         let mut storage = self.storage.lock().unwrap();
 
-        println!(
-            "{} is going to remove {:?}",
-            self.routing.lock().unwrap().current.identifier(),
-            remove_keys
-        );
-
         for key in remove_keys.keys {
             storage.remove(&key);
         }
@@ -404,7 +389,8 @@ where
     }
 
     fn handle_put_keys(&self, put_keys: KeyPut) -> crate::Result<()> {
-        // TODO: implement concurrency
+        // TODO: Spawn a new thread to retrieve all values of the keys to be stored
+
         for key in put_keys.keys {
             if !self.storage.lock().unwrap().contains_key(&key) {
                 let next = *self.routing.lock().unwrap().closest_preceding_peer(key);

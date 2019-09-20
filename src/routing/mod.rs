@@ -103,7 +103,6 @@ impl<T: Identify + Copy + Clone> Routing<T> {
     }
 
     pub fn last_successor(&self) -> Option<&IdentifierValue<T>> {
-        // TODO: do not hardcode 4 here
         if let Some(last) = self.successor.get(3) {
             if let Some((fst_index, _)) = self
                 .successor
