@@ -4,6 +4,7 @@ extern crate lazy_static;
 extern crate log;
 extern crate stderrlog;
 
+use bigint::U256;
 use dht::config::Config;
 use dht::message::api::{DhtGet, DhtPut};
 use dht::message::Message;
@@ -20,7 +21,6 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
-use bigint::U256;
 
 type MockSyn = (Receiver<MockMsg>, Sender<Receiver<MockMsg>>);
 type ConnChannel = Sender<MockSyn>;
@@ -90,7 +90,7 @@ impl Identify for MockAddr {
             MockAddr::ApiAddr(addr) | MockAddr::P2PAddr(addr) => addr,
         };
 
-        let mut slice = [0;32];
+        let mut slice = [0; 32];
         U256::to_big_endian(addr, &mut slice);
         Identifier::generate(&slice)
     }
@@ -249,7 +249,12 @@ fn handle_inspect_impl(peers: &HashMap<U256, Arc<Peer<MockConn, MockAddr>>>) -> 
     } else {
         let addr = U256::from_dec_str(&addr).or(Err("Couldn't parse number"))?;
         let peer = peers.get(&addr).ok_or("Peer not in network")?;
-        println!("Peer {} (Id: {})\n{}", addr, MockAddr::P2PAddr(addr).identifier(), peer);
+        println!(
+            "Peer {} (Id: {})\n{}",
+            addr,
+            MockAddr::P2PAddr(addr).identifier(),
+            peer
+        );
     }
     Ok(())
 }

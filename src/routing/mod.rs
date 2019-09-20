@@ -133,4 +133,3 @@ impl<T: Identify + Copy + Clone> Routing<T> {
         false
     }
 }
-

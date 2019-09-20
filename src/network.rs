@@ -302,7 +302,7 @@ pub trait ServerHandler<C> {
 /// # let server = Server::new(handler);
 /// #
 /// # let (tx, rx) = channel();
-/// # 
+/// #
 /// # server.listen("127.0.0.1:8080".parse().unwrap(), 4, rx)
 /// #    .expect("could not bind to port");
 /// ```

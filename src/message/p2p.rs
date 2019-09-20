@@ -657,7 +657,9 @@ mod tests {
             3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
         ];
 
-        let msg = StoragePutSuccess { key: Identifier::new(&[3; 32]) };
+        let msg = StoragePutSuccess {
+            key: Identifier::new(&[3; 32]),
+        };
 
         test_message_payload(&buf, msg);
     }
@@ -671,7 +673,9 @@ mod tests {
             3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
         ];
 
-        let msg = StorageFailure { key: Identifier::new(&[3; 32]) };
+        let msg = StorageFailure {
+            key: Identifier::new(&[3; 32]),
+        };
 
         test_message_payload(&buf, msg);
     }

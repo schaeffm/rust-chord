@@ -70,11 +70,7 @@ impl MessagePayload for DhtPut {
         let mut value = Vec::new();
         reader.read_to_end(&mut value)?;
 
-        Ok(DhtPut {
-            ttl,
-            key,
-            value,
-        })
+        Ok(DhtPut { ttl, key, value })
     }
 
     fn write_to(&self, writer: &mut dyn Write) -> io::Result<()> {

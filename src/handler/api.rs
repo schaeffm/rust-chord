@@ -11,7 +11,6 @@ use std::error::Error;
 use std::io;
 use std::sync::{Arc, Mutex};
 
-
 const REPLICATION_INDEX: u8 = 2;
 
 /// Handler for api requests
