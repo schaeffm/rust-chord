@@ -53,7 +53,7 @@ impl Identifier {
         Identifier(U256::one() << index)
     }
 
-    fn generate(bytes: &[u8]) -> Self {
+    pub fn generate(bytes: &[u8]) -> Self {
         let mut hasher = Sha256::new();
         hasher.input(bytes);
         Self::new(&hasher.result())

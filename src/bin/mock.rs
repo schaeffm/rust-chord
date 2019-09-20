@@ -20,6 +20,7 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
+use bigint::U256;
 
 type MockSyn = (Receiver<MockMsg>, Sender<Receiver<MockMsg>>);
 type ConnChannel = Sender<MockSyn>;
@@ -45,12 +46,9 @@ lazy_static! {
         ("get", "Retrieve value for some key from DHT"),
         ("help", "Display this message"),
         ("inspect", "Inspect the network"),
-        ("quit", "Exit the program"),
         ("join", "Add a new node to the network"),
         ("create", "Open a new network"),
-        ("leave", "Remove a node from the network"),
-        ("list", "List all nodes in the network"),
-        ("consistency", "Check the network for consistency"),
+        ("kill", "Remove a node from the network"),
     ]
     .iter()
     .cloned()
@@ -64,8 +62,8 @@ struct MockConn {
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 enum MockAddr {
-    ApiAddr(u64),
-    P2PAddr(u64),
+    ApiAddr(U256),
+    P2PAddr(U256),
 }
 
 impl std::fmt::Debug for MockAddr {
@@ -91,7 +89,10 @@ impl Identify for MockAddr {
         let addr = match self {
             MockAddr::ApiAddr(addr) | MockAddr::P2PAddr(addr) => addr,
         };
-        Identifier::new(&addr.to_be_bytes())
+
+        let mut slice = [0;32];
+        U256::to_big_endian(addr, &mut slice);
+        Identifier::generate(&slice)
     }
 }
 
@@ -147,16 +148,16 @@ impl ConnectionTrait for MockConn {
     }
 }
 
-fn join(addr: u64, bootstrap: u64) -> (Sender<()>, Arc<Peer<MockConn, MockAddr>>) {
+fn join(addr: U256, bootstrap: U256) -> (Sender<()>, Arc<Peer<MockConn, MockAddr>>) {
     create_peer(addr, Some(MockAddr::P2PAddr(bootstrap)))
 }
 
-fn create(addr: u64) -> (Sender<()>, Arc<Peer<MockConn, MockAddr>>) {
+fn create(addr: U256) -> (Sender<()>, Arc<Peer<MockConn, MockAddr>>) {
     create_peer(addr, None)
 }
 
 fn create_peer(
-    addr: u64,
+    addr: U256,
     bootstrap: Option<MockAddr>,
 ) -> (Sender<()>, Arc<Peer<MockConn, MockAddr>>) {
     let (tx, rx) = channel();
@@ -195,9 +196,9 @@ fn main() {
     let mut peers = HashMap::new();
     let mut channels = HashMap::new();
 
-    let (channel, peer) = create(1);
-    peers.insert(1, peer);
-    channels.insert(1, channel);
+    let (channel, peer) = create(U256::from(1));
+    peers.insert(U256::from(1), peer);
+    channels.insert(U256::from(1), channel);
     //peers.insert(2, join(2, 1));
 
     println!("Client to talk to the DHT Mock App");
@@ -234,27 +235,30 @@ fn read_line(question: &str) -> Option<String> {
     }
 }
 
-fn handle_inspect_impl(peers: &HashMap<u64, Arc<Peer<MockConn, MockAddr>>>) -> Result<()> {
-    let addr = read_line("Which peer?").unwrap();
+fn handle_inspect_impl(peers: &HashMap<U256, Arc<Peer<MockConn, MockAddr>>>) -> Result<()> {
+    let addr = read_line("Which peer? (\"all\" will show the whole network)").unwrap();
     if addr == "all" {
         for (k, peer) in peers.iter() {
-            println!("Peer {}\n{}", k, peer);
+            let hex = MockAddr::P2PAddr(*k).identifier().as_bytes()[..8]
+                .iter()
+                .map(|b| format!("{:02X}", b))
+                .collect::<Vec<_>>()
+                .join(":");
+            println!("Peer {} (Id: {}...)\n{}", k, hex, peer);
         }
     } else {
-        let addr = addr.parse::<u64>()?;
+        let addr = U256::from_dec_str(&addr).or(Err("Couldn't parse number"))?;
         let peer = peers.get(&addr).ok_or("Peer not in network")?;
-        println!("{}", peer);
+        println!("Peer {} (Id: {})\n{}", addr, MockAddr::P2PAddr(addr).identifier(), peer);
     }
     Ok(())
 }
 
-fn handle_inspect(peers: &HashMap<u64, Arc<Peer<MockConn, MockAddr>>>) {
+fn handle_inspect(peers: &HashMap<U256, Arc<Peer<MockConn, MockAddr>>>) {
     if let Err(e) = handle_inspect_impl(peers) {
         println!("{}", e);
     }
 }
-
-fn _handle_quit() {}
 
 fn handle_help() {
     println!("Commands:");
@@ -273,7 +277,7 @@ fn handle_put_impl() -> Result<()> {
     let key = read_line("Enter a key").unwrap();
     let value = read_line("Enter a value").unwrap();
     let addr = read_line("On which peer?").unwrap();
-    let peer = MockAddr::ApiAddr(addr.parse::<u64>()?);
+    let peer = MockAddr::ApiAddr(addr.parse::<U256>()?);
     let len = std::cmp::min(32, key.len());
     let mut raw_key = [0; 32];
 
@@ -301,7 +305,8 @@ fn handle_get() {
 
 fn handle_get_impl() -> Result<()> {
     let key = read_line("Enter a key").unwrap();
-    let peer = MockAddr::ApiAddr(read_line("On which peer?").unwrap().parse::<u64>()?);
+    let peer = read_line("On which peer?").unwrap();
+    let peer = MockAddr::ApiAddr(U256::from_dec_str(&peer).or(Err("Couldn't parse number"))?);
 
     let len = std::cmp::min(32, key.len());
 
@@ -329,8 +334,8 @@ fn handle_get_impl() -> Result<()> {
 }
 
 fn handle_join(
-    peers: &mut HashMap<u64, Arc<Peer<MockConn, MockAddr>>>,
-    channels: &mut HashMap<u64, Sender<()>>,
+    peers: &mut HashMap<U256, Arc<Peer<MockConn, MockAddr>>>,
+    channels: &mut HashMap<U256, Sender<()>>,
 ) {
     if let Err(e) = handle_join_impl(peers, channels) {
         println!("{}", e);
@@ -338,15 +343,13 @@ fn handle_join(
 }
 
 fn handle_join_impl(
-    peers: &mut HashMap<u64, Arc<Peer<MockConn, MockAddr>>>,
-    channels: &mut HashMap<u64, Sender<()>>,
+    peers: &mut HashMap<U256, Arc<Peer<MockConn, MockAddr>>>,
+    channels: &mut HashMap<U256, Sender<()>>,
 ) -> Result<()> {
-    let addr = read_line("Address of the new peer?")
-        .unwrap()
-        .parse::<u64>()?;
-    let bootstrap = read_line("Address of the bootstrap peer?")
-        .unwrap()
-        .parse::<u64>()?;
+    let addr = read_line("Address of the new peer?").unwrap();
+    let addr = U256::from_dec_str(&addr).or(Err("Couldn't parse number"))?;
+    let bootstrap = read_line("Address of the bootstrap peer?").unwrap();
+    let bootstrap = U256::from_dec_str(&bootstrap).or(Err("Couldn't parse number"))?;
 
     let peer = join(addr, bootstrap);
 
@@ -357,8 +360,8 @@ fn handle_join_impl(
 }
 
 fn handle_kill(
-    peers: &mut HashMap<u64, Arc<Peer<MockConn, MockAddr>>>,
-    channels: &mut HashMap<u64, Sender<()>>,
+    peers: &mut HashMap<U256, Arc<Peer<MockConn, MockAddr>>>,
+    channels: &mut HashMap<U256, Sender<()>>,
 ) {
     if let Err(e) = handle_kill_impl(peers, channels) {
         println!("{}", e);
@@ -366,12 +369,11 @@ fn handle_kill(
 }
 
 fn handle_kill_impl(
-    peers: &mut HashMap<u64, Arc<Peer<MockConn, MockAddr>>>,
-    channels: &mut HashMap<u64, Sender<()>>,
+    peers: &mut HashMap<U256, Arc<Peer<MockConn, MockAddr>>>,
+    channels: &mut HashMap<U256, Sender<()>>,
 ) -> Result<()> {
-    let addr = read_line("Address of the peer to kill?")
-        .unwrap()
-        .parse::<u64>()?;
+    let addr = read_line("Address of the peer to kill?").unwrap();
+    let addr = U256::from_dec_str(&addr).or(Err("Couldn't parse number"))?;
 
     channels.get(&addr).ok_or("Peer not in network")?.send(())?;
 
@@ -381,7 +383,7 @@ fn handle_kill_impl(
     Ok(())
 }
 
-fn _handle_consistency(peers: &HashMap<u64, Arc<Peer<MockConn, MockAddr>>>) {
+fn _handle_consistency(peers: &HashMap<U256, Arc<Peer<MockConn, MockAddr>>>) {
     let peers: Vec<Arc<Peer<_, _>>> = peers.values().cloned().collect();
     Peer::preds_consistent(peers);
 }
