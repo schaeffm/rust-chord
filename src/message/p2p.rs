@@ -151,7 +151,6 @@ pub struct KeyRemove {
 
 impl MessagePayload for StorageGet {
     fn parse(reader: &mut dyn Read) -> io::Result<Self> {
-
         // Skip reserved fields
         reader.read_u8()?;
         reader.read_u8()?;
@@ -166,7 +165,6 @@ impl MessagePayload for StorageGet {
     }
 
     fn write_to(&self, writer: &mut dyn Write) -> io::Result<()> {
-
         // Fill reserved fields
         writer.write_u8(0)?;
         writer.write_u8(0)?;
@@ -219,7 +217,10 @@ impl MessagePayload for StorageGetSuccess {
         let mut value = Vec::new();
         reader.read_to_end(&mut value)?;
 
-        Ok(StorageGetSuccess { key: Identifier::new(&raw_key), value })
+        Ok(StorageGetSuccess {
+            key: Identifier::new(&raw_key),
+            value,
+        })
     }
 
     fn write_to(&self, writer: &mut dyn Write) -> io::Result<()> {
@@ -235,7 +236,9 @@ impl MessagePayload for StoragePutSuccess {
         let mut raw_key = [0; 32];
         reader.read_exact(&mut raw_key)?;
 
-        Ok(StoragePutSuccess { key: Identifier::new(&raw_key) })
+        Ok(StoragePutSuccess {
+            key: Identifier::new(&raw_key),
+        })
     }
 
     fn write_to(&self, writer: &mut dyn Write) -> io::Result<()> {
@@ -250,7 +253,9 @@ impl MessagePayload for StorageFailure {
         let mut raw_key = [0; 32];
         reader.read_exact(&mut raw_key)?;
 
-        Ok(StorageFailure { key: Identifier::new(&raw_key) })
+        Ok(StorageFailure {
+            key: Identifier::new(&raw_key),
+        })
     }
 
     fn write_to(&self, writer: &mut dyn Write) -> io::Result<()> {
@@ -470,7 +475,10 @@ impl MessagePayload for SuccessorListChanges<SocketAddr> {
             new_successors.push(socket_addr);
         }
 
-        Ok(SuccessorListChanges { old_successors, new_successors })
+        Ok(SuccessorListChanges {
+            old_successors,
+            new_successors,
+        })
     }
 
     fn write_to(&self, writer: &mut dyn Write) -> io::Result<()> {
@@ -503,13 +511,21 @@ impl MessagePayload for SuccessorListChanges<SocketAddr> {
 }
 
 impl MessagePayload for SuccessorsRequest {
-    fn parse(_reader: &mut dyn Read) -> io::Result<Self> { Ok(SuccessorsRequest{})}
-    fn write_to(&self, _writer: &mut dyn Write) -> io::Result<()> { Ok(()) }
+    fn parse(_reader: &mut dyn Read) -> io::Result<Self> {
+        Ok(SuccessorsRequest {})
+    }
+    fn write_to(&self, _writer: &mut dyn Write) -> io::Result<()> {
+        Ok(())
+    }
 }
 
 impl MessagePayload for PredecessorNotFound {
-    fn parse(_reader: &mut dyn Read) -> io::Result<Self> { Ok(PredecessorNotFound{})}
-    fn write_to(&self, _writer: &mut dyn Write) -> io::Result<()> { Ok(()) }
+    fn parse(_reader: &mut dyn Read) -> io::Result<Self> {
+        Ok(PredecessorNotFound {})
+    }
+    fn write_to(&self, _writer: &mut dyn Write) -> io::Result<()> {
+        Ok(())
+    }
 }
 
 impl MessagePayload for KeyPut {
@@ -577,16 +593,15 @@ mod tests {
     fn storage_get() {
         #[rustfmt::skip]
         let buf = [
-            // replication index and reserved
-            4, 0, 0, 0,
+            // reserved fields
+            0, 0, 0,
             // 32 bytes for key
             3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
             3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
         ];
 
         let msg = StorageGet {
-            replication_index: 4,
-            raw_key: [3; 32],
+            key: Identifier::new(&[3; 32]),
         };
 
         test_message_payload(&buf, msg);
@@ -596,8 +611,8 @@ mod tests {
     fn storage_put() {
         #[rustfmt::skip]
         let buf = [
-            // TTL, replication index and reserved
-            0, 12, 4, 0,
+            // TTL and reserved fields
+            0, 12, 0,
             // 32 bytes for key
             3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
             3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
@@ -607,8 +622,7 @@ mod tests {
 
         let msg = StoragePut {
             ttl: 12,
-            replication_index: 4,
-            raw_key: [3; 32],
+            key: Identifier::new(&[3; 32]),
             value: vec![1, 2, 3, 4, 5],
         };
 
@@ -627,7 +641,7 @@ mod tests {
         ];
 
         let msg = StorageGetSuccess {
-            key: [3; 32],
+            key: Identifier::new(&[3; 32]),
             value: vec![1, 2, 3, 4, 5],
         };
 
@@ -643,7 +657,7 @@ mod tests {
             3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
         ];
 
-        let msg = StoragePutSuccess { key: [3; 32] };
+        let msg = StoragePutSuccess { key: Identifier::new(&[3; 32]) };
 
         test_message_payload(&buf, msg);
     }
@@ -657,7 +671,7 @@ mod tests {
             3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
         ];
 
-        let msg = StorageFailure { key: [3; 32] };
+        let msg = StorageFailure { key: Identifier::new(&[3; 32]) };
 
         test_message_payload(&buf, msg);
     }

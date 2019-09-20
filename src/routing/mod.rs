@@ -32,8 +32,13 @@ pub struct Routing<T> {
 
 impl<T: Identify + Copy + Clone> Routing<T> {
     /// Creates a new `Routing` instance for the given initial values.
-    pub fn new(current: T, predecessor: T, successor: T, finger_table: Vec<T>, predecessor_failed: bool) -> Self {
-
+    pub fn new(
+        current: T,
+        predecessor: T,
+        successor: T,
+        finger_table: Vec<T>,
+        predecessor_failed: bool,
+    ) -> Self {
         Self {
             current: IdentifierValue::new(current),
             predecessor: IdentifierValue::new(predecessor),
@@ -52,7 +57,7 @@ impl<T: Identify + Copy + Clone> Routing<T> {
     }
 
     /// Sets the predecessor's address.
-    pub fn set_predecessor(&mut self, new_pred:T) {
+    pub fn set_predecessor(&mut self, new_pred: T) {
         self.predecessor_failed = false;
         self.predecessor = IdentifierValue::new(new_pred);
     }
@@ -80,36 +85,39 @@ impl<T: Identify + Copy + Clone> Routing<T> {
 
     /// Checks whether this peer is responsible for the given identifier.
     pub fn responsible_for(&self, identifier: Identifier) -> bool {
-            identifier.is_between_end(&self.predecessor.identifier(), &self.current.identifier())
+        identifier.is_between_end(&self.predecessor.identifier(), &self.current.identifier())
     }
 
     /// Returns the peer closest to the given identifier.
     pub fn closest_preceding_peer(&self, identifier: Identifier) -> &IdentifierValue<T> {
         for finger in &self.finger_table {
-            if finger.identifier().is_between(&self.current.identifier(), &identifier) {
-                return finger
+            if finger
+                .identifier()
+                .is_between(&self.current.identifier(), &identifier)
+            {
+                return finger;
             }
         }
-        return self.successor.first().unwrap();
+
+        self.successor.first().unwrap()
     }
 
     pub fn last_successor(&self) -> Option<&IdentifierValue<T>> {
         // TODO: do not hardcode 4 here
         if let Some(last) = self.successor.get(3) {
-            if last.identifier() == self.current.identifier() {
-                return None;
-            }
-            if let Some ((fst_index, _)) = self.successor
+            if let Some((fst_index, _)) = self
+                .successor
                 .iter()
                 .enumerate()
-                .find(|(i, x)| x.identifier() == last.identifier()) {
-                if fst_index == 3 {
-                    return Some(last)
+                .find(|(_, x)| x.identifier() == last.identifier())
+            {
+                if fst_index == 3 && (last.identifier() != self.current.identifier()) {
+                    return Some(last);
                 }
             }
         }
 
-        return None
+        None
     }
 
     pub fn preds_consistent(_peers: Vec<Self>) -> bool {
@@ -127,58 +135,3 @@ impl<T: Identify + Copy + Clone> Routing<T> {
     }
 }
 
-/// Returns the finger table entry number for the closest predecessor.
-fn _finger_table_entry_number(current: Identifier, lookup: Identifier) -> u8 {
-    let diff = lookup - current - Identifier::new_from_usize(1);
-    let zeros = diff.leading_zeros();
-
-    255 - zeros as u8
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use bigint::U256;
-
-    #[test]
-    fn return_first_entry() {
-        let mut bytes1 = [0; 32];
-        let mut bytes2 = [0; 32];
-
-        U256::from(0).to_big_endian(&mut bytes1);
-        U256::from(2).to_big_endian(&mut bytes2);
-
-        let id1 = Identifier::new(&bytes1);
-        let id2 = Identifier::new(&bytes2);
-
-        assert_eq!(finger_table_entry_number(id1, id2), 0);
-    }
-
-    #[test]
-    fn return_second_entry() {
-        let mut bytes1 = [0; 32];
-        let mut bytes2 = [0; 32];
-
-        U256::from(0).to_big_endian(&mut bytes1);
-        U256::from(3).to_big_endian(&mut bytes2);
-
-        let id1 = Identifier::new(&bytes1);
-        let id2 = Identifier::new(&bytes2);
-
-        assert_eq!(finger_table_entry_number(id1, id2), 1);
-    }
-
-    #[test]
-    fn return_last_entry() {
-        let mut bytes1 = [0; 32];
-        let mut bytes2 = [0; 32];
-
-        U256::from(1).to_big_endian(&mut bytes1);
-        U256::from(0).to_big_endian(&mut bytes2);
-
-        let id1 = Identifier::new(&bytes1);
-        let id2 = Identifier::new(&bytes2);
-
-        assert_eq!(finger_table_entry_number(id1, id2), 255);
-    }
-}

@@ -16,9 +16,9 @@ use std::sync::Mutex;
 
 /// Basic information needed to connect to the network using a bootstrap peer
 pub struct Bootstrap<C, A>
-    where
-        C: ConnectionTrait<Address=A>,
-        A: PeerAddr,
+where
+    C: ConnectionTrait<Address = A>,
+    A: PeerAddr,
 {
     current_addr: A,
     boot_addr: A,
@@ -26,7 +26,7 @@ pub struct Bootstrap<C, A>
     p: PhantomData<C>,
 }
 
-impl<A: PeerAddr, C: ConnectionTrait<Address=A>> Bootstrap<C, A> {
+impl<A: PeerAddr, C: ConnectionTrait<Address = A>> Bootstrap<C, A> {
     /// Initializes the bootstrap algorithm by providing the peer's own address,
     /// the address of a bootstrapping peer and the number of fingers that
     /// should be stored.
@@ -67,15 +67,15 @@ impl<A: PeerAddr, C: ConnectionTrait<Address=A>> Bootstrap<C, A> {
 ///
 /// [`Routing`]: ../routing/struct.Routing.html
 pub struct Stabilization<C, A>
-    where
-        C: ConnectionTrait<Address=A>,
-        A: PeerAddr,
+where
+    C: ConnectionTrait<Address = A>,
+    A: PeerAddr,
 {
     procedures: Procedures<C, A>,
     routing: Arc<Mutex<Routing<A>>>,
 }
 
-impl<C: ConnectionTrait<Address=A>, A: PeerAddr> Stabilization<C, A> {
+impl<C: ConnectionTrait<Address = A>, A: PeerAddr> Stabilization<C, A> {
     /// Initializes the stabilization struct with a routing object and the connection timeout.
     pub fn new(routing: Arc<Mutex<Routing<A>>>, timeout: u64) -> Self {
         let procedures = Procedures::new(timeout);
@@ -106,7 +106,6 @@ impl<C: ConnectionTrait<Address=A>, A: PeerAddr> Stabilization<C, A> {
         update_successors.and(update_fingers)
     }
 
-
     fn update_successors(&self) -> crate::Result<()> {
         let (current, successors) = {
             let routing = self.routing.lock().unwrap();
@@ -118,7 +117,7 @@ impl<C: ConnectionTrait<Address=A>, A: PeerAddr> Stabilization<C, A> {
             .map(|succ| self.procedures.get_successors(*current, **succ))
             .filter_map(Result::ok)
             .next()
-            .unwrap_or(Vec::new());
+            .unwrap_or_default();
 
         if let Some(succ) = new_successors.first() {
             self.procedures.notify(*current, **succ);
@@ -126,7 +125,8 @@ impl<C: ConnectionTrait<Address=A>, A: PeerAddr> Stabilization<C, A> {
 
         let ids_old = successors.iter().map(|i| **i).collect();
         let ids_new = new_successors.iter().map(|i| **i).collect();
-        self.procedures.send_successor_changes(*current, ids_old, ids_new);
+        self.procedures
+            .send_successor_changes(*current, ids_old, ids_new);
 
         self.routing.lock().unwrap().set_successors(new_successors);
         Ok(())

@@ -14,11 +14,11 @@ use std::io;
 use std::io::prelude::*;
 use std::io::Cursor;
 use std::net::*;
+use std::sync::mpsc::Receiver;
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 use threadpool::ThreadPool;
-use std::sync::mpsc::Receiver;
 
 const MAX_MESSAGE_SIZE: usize = 64000;
 
@@ -36,7 +36,16 @@ const MAX_MESSAGE_SIZE: usize = 64000;
 /// con.send(&msg).expect("could not send message");
 /// ```
 pub trait PeerAddr:
-    Clone + Copy + std::fmt::Display + std::fmt::Debug + std::cmp::PartialEq + Send + Identify + 'static + std::cmp::Eq + std::hash::Hash
+    Clone
+    + Copy
+    + std::fmt::Display
+    + std::fmt::Debug
+    + std::cmp::PartialEq
+    + Send
+    + Identify
+    + 'static
+    + std::cmp::Eq
+    + std::hash::Hash
 {
 }
 impl<T> PeerAddr for T where
@@ -66,7 +75,7 @@ where
     fn shutdown(self) -> Result<()>;
     fn bind(addr: Self::Address) -> Result<Self::Listener>;
     fn listen<'a>(listener: &'a Self::Listener) -> Box<dyn 'a + Iterator<Item = Self>>;
-    fn accept<'a>(listener: &'a Self::Listener) -> Result<Self>;
+    fn accept(listener: &Self::Listener) -> Result<Self>;
 }
 
 impl ConnectionTrait for Connection {
@@ -135,11 +144,13 @@ impl ConnectionTrait for Connection {
 
     fn bind(addr: Self::Address) -> Result<Self::Listener> {
         let listener = TcpListener::bind(addr)?;
-        listener.set_nonblocking(true).expect("Cannot set non-blocking");
+        listener
+            .set_nonblocking(true)
+            .expect("Cannot set non-blocking");
         Ok(listener)
     }
 
-    fn accept<'a>(listener: &'a Self::Listener) -> Result<Self> {
+    fn accept(listener: &Self::Listener) -> Result<Self> {
         Ok(Connection::from_stream(listener.accept()?.0))
     }
 }
@@ -308,7 +319,7 @@ pub trait ServerHandler<C> {
 /// ```no_run
 /// # use dht::network::*;
 /// # use std::io;
-/// #
+/// # use std::sync::mpsc::channel;
 /// # struct TestHandler;
 /// # impl ServerHandler<Connection> for TestHandler {
 /// #     fn handle_connection(&self, _: Connection) {}
@@ -317,10 +328,12 @@ pub trait ServerHandler<C> {
 /// #
 /// # let handler = TestHandler;
 /// #
-/// let server = Server::new(handler);
-///
-/// server.listen("127.0.0.1:8080".parse().unwrap(), 4)
-///     .expect("could not bind to port");
+/// # let server = Server::new(handler);
+/// #
+/// # let (tx, rx) = channel();
+/// # 
+/// # server.listen("127.0.0.1:8080".parse().unwrap(), 4, rx)
+/// #    .expect("could not bind to port");
 /// ```
 pub struct Server<T> {
     handler: Arc<T>,
@@ -373,11 +386,11 @@ impl<T: Send + Sync + 'static> Server<T> {
                 }
 
                 if let Ok(con) = C::accept(&listener) {
-                        // do something with the TcpStream
-                        let handler = Arc::clone(&self.handler);
-                        pool.execute(move || {
-                            handler.handle_connection(con);
-                        });
+                    // do something with the TcpStream
+                    let handler = Arc::clone(&self.handler);
+                    pool.execute(move || {
+                        handler.handle_connection(con);
+                    });
                 }
             }
         });

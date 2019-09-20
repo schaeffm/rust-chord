@@ -10,8 +10,8 @@ use dht::Peer;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::process;
-use structopt::StructOpt;
 use std::sync::mpsc::channel;
+use structopt::StructOpt;
 
 #[derive(StructOpt, Debug)]
 #[structopt(
@@ -61,7 +61,7 @@ fn main() {
     // TODO init logger with verbosity flag
 
     // TODO: quit?
-    let (tx, rx) = channel();
+    let (_tx, rx) = channel();
 
     let peer = Peer::<Connection, SocketAddr>::create(config);
     if let Err(e) = peer.unwrap().run(opt.bootstrap, rx) {

@@ -150,11 +150,17 @@ impl Message<SocketAddr> {
                 MessagePayload::parse(reader).map(Message::PredecessorNotify)
             }
             Self::PREDECESSOR_FOUND => MessagePayload::parse(reader).map(Message::PredecessorFound),
-            Self::PREDECESSOR_NOT_FOUND => MessagePayload::parse(reader).map(Message::PredecessorNotFound),
+            Self::PREDECESSOR_NOT_FOUND => {
+                MessagePayload::parse(reader).map(Message::PredecessorNotFound)
+            }
             Self::KEY_PUT => MessagePayload::parse(reader).map(Message::KeyPut),
             Self::KEY_REMOVE => MessagePayload::parse(reader).map(Message::KeyRemove),
-            Self::SUCCESSORS_LIST_CHANGES => MessagePayload::parse(reader).map(Message::SuccessorlistChanges),
-            Self::SUCCESSORS_REQUEST => MessagePayload::parse(reader).map(Message::SuccessorsRequest),
+            Self::SUCCESSORS_LIST_CHANGES => {
+                MessagePayload::parse(reader).map(Message::SuccessorlistChanges)
+            }
+            Self::SUCCESSORS_REQUEST => {
+                MessagePayload::parse(reader).map(Message::SuccessorsRequest)
+            }
             Self::SUCCESSORS_REPLY => MessagePayload::parse(reader).map(Message::SuccessorsReply),
 
             _ => Err(io::Error::new(
