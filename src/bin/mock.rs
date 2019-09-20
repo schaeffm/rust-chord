@@ -281,7 +281,6 @@ fn handle_put_impl() -> Result<()> {
 
     let dht_put = DhtPut {
         ttl: 10,
-        replication: 2,
         key: raw_key,
         value: value.as_bytes().to_vec(),
     };

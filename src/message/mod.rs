@@ -323,9 +323,9 @@ mod tests {
         #[rustfmt::skip]
         let buf = [
             // header
-            0, 45, 2, 138,
-            // TTL, replication and reserved
-            0, 12, 4, 0,
+            0, 44, 2, 138,
+            // TTL and reserved field
+            0, 12, 0,
             // 32 bytes for key
             3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
             3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
@@ -337,7 +337,6 @@ mod tests {
 
         let msg = Message::DhtPut(DhtPut {
             ttl: 12,
-            replication: 4,
             key: [3; 32],
             value: vec![1, 2, 3, 4, 5],
         });
@@ -404,9 +403,9 @@ mod tests {
         #[rustfmt::skip]
         let buf = [
             // header
-            0, 45, 2, 138,
-            // TTL, replication and reserved
-            0, 12, 4, 0,
+            0, 44, 2, 138,
+            // TTL and reserved field
+            0, 12, 0,
             // 32 bytes for key
             3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
             3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
@@ -416,7 +415,6 @@ mod tests {
 
         let msg = Message::DhtPut(DhtPut {
             ttl: 12,
-            replication: 4,
             key: [3; 32],
             value: vec![1, 2, 3, 4, 5],
         });
@@ -424,7 +422,7 @@ mod tests {
         let mut buffer = [0; 64000];
         let size = msg.write_to(Cursor::new(&mut buffer[..])).unwrap();
 
-        assert_eq!(45, size);
+        assert_eq!(44, size);
         assert_eq!(&buf[..], &buffer[..size]);
     }
 }

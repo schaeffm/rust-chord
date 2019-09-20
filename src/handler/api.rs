@@ -11,6 +11,9 @@ use std::error::Error;
 use std::io;
 use std::sync::{Arc, Mutex};
 
+
+const REPLICATION_INDEX: u8 = 2;
+
 /// Handler for api requests
 ///
 /// The supported incoming api messages are `DHT GET` and `DHT PUT`.
@@ -48,8 +51,7 @@ impl<A: PeerAddr, C: ConnectionTrait<Address = A>> ApiHandler<C, A> {
 
     fn handle_dht_get(&self, mut api_con: C, dht_get: DhtGet) -> crate::Result<()> {
         // iterate through all replication indices
-        // TODO: use replication index
-        for i in 0..1 {
+        for i in 0..REPLICATION_INDEX {
             let key = Key {
                 raw_key: dht_get.key,
                 replication_index: i,
@@ -78,7 +80,7 @@ impl<A: PeerAddr, C: ConnectionTrait<Address = A>> ApiHandler<C, A> {
 
     fn handle_dht_put(&self, _con: C, dht_put: DhtPut) -> crate::Result<()> {
         // iterate through all replication indices
-        for i in 0..1 {
+        for i in 0..REPLICATION_INDEX {
             let key = Key {
                 raw_key: dht_put.key,
                 replication_index: i,

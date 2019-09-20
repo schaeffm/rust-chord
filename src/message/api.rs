@@ -23,7 +23,6 @@ use std::io::prelude::*;
 #[derive(Debug, PartialEq)]
 pub struct DhtPut {
     pub ttl: u16,
-    pub replication: u8,
     pub key: [u8; 32],
     pub value: Vec<u8>,
 }
@@ -61,7 +60,6 @@ pub struct DhtFailure {
 impl MessagePayload for DhtPut {
     fn parse(reader: &mut dyn Read) -> io::Result<Self> {
         let ttl = reader.read_u16::<NetworkEndian>()?;
-        let replication = reader.read_u8()?;
 
         // Skip reserved field
         reader.read_u8()?;
@@ -74,7 +72,6 @@ impl MessagePayload for DhtPut {
 
         Ok(DhtPut {
             ttl,
-            replication,
             key,
             value,
         })
@@ -82,7 +79,6 @@ impl MessagePayload for DhtPut {
 
     fn write_to(&self, writer: &mut dyn Write) -> io::Result<()> {
         writer.write_u16::<NetworkEndian>(self.ttl)?;
-        writer.write_u8(self.replication)?;
         writer.write_u8(0)?;
         writer.write_all(&self.key)?;
         writer.write_all(&self.value)?;
@@ -149,8 +145,8 @@ mod tests {
     fn dht_put() {
         #[rustfmt::skip]
         let buf = [
-            // TTL, replication and reserved
-            0, 12, 4, 0,
+            // TTL and reserved field
+            0, 12, 0,
             // 32 bytes for key
             3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
             3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
@@ -160,7 +156,6 @@ mod tests {
 
         let msg = DhtPut {
             ttl: 12,
-            replication: 4,
             key: [3; 32],
             value: vec![1, 2, 3, 4, 5],
         };

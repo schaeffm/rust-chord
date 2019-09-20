@@ -389,7 +389,8 @@ where
     }
 
     fn handle_put_keys(&self, put_keys: KeyPut) -> crate::Result<()> {
-        // TODO: implement concurrency
+        // TODO: Spawn a new thread to retrieve all values of the keys to be stored
+
         for key in put_keys.keys {
             if !self.storage.lock().unwrap().contains_key(&key) {
                 let next = *self.routing.lock().unwrap().closest_preceding_peer(key);

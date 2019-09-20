@@ -93,7 +93,6 @@ fn handle_put<C: ConnectionTrait<Address = A>, A: PeerAddr>(config: Config<A>) {
 
     let dht_put = DhtPut {
         ttl: 10,
-        replication: 2,
         key: raw_key,
         value: value.as_bytes().to_vec(),
     };
