@@ -177,7 +177,6 @@ impl Connection {
     /// [`TcpStream::set_write_timeout`]:
     /// ../../std/net/struct.TcpStream.html#method.set_write_timeout
     pub fn open<A: ToSocketAddrs>(addr: A, timeout_ms: u64) -> io::Result<Self> {
-        // TODO add connection timeout
         let stream = TcpStream::connect(addr)?;
 
         trace!("Connection to {} - Opened", stream.peer_addr()?);
@@ -190,7 +189,6 @@ impl Connection {
     }
 
     fn from_stream(stream: TcpStream) -> Self {
-        // TODO set read and write timeout
         let buffer = [0; MAX_MESSAGE_SIZE];
         Self { stream, buffer }
     }
@@ -283,33 +281,6 @@ pub trait ServerHandler<C> {
     ///
     /// The given `error` should be handled appropiately.
     fn handle_error(&self, error: io::Error);
-
-    //// Handles an incomming connection.
-    ////
-    //// Depending on the `result` this either calls [`handle_error`] or
-    //// creates a new [`Connection`] from the given [`TcpStream`] and
-    //// calls [`handle_connection`].
-    ////
-    //// [`handle_error`]: #tymethod.handle_error
-    //// [`Connection`]: struct.Connection.html
-    //// [`TcpStream`]: ../../std/net/struct.TcpStream.html
-    //// [`handle_connection`]: #tymethod.handle_connection
-    //fn handle_incoming(&self, result: io::Result<TcpStream>) {
-    //    match result {
-    //        Ok(stream) => {
-    //            trace!(
-    //                "Handling incoming connection from {}",
-    //                stream.peer_addr().unwrap()
-    //            );
-
-    //            // TODO handle timeouts
-    //            let connection = Connection::from_stream(stream);
-
-    //            self.handle_connection(connection)
-    //        }
-    //        Err(error) => self.handle_error(error),
-    //    }
-    //}
 }
 
 /// A multithreaded server waiting for connections

@@ -58,9 +58,6 @@ fn main() {
         process::exit(2);
     });
 
-    // TODO init logger with verbosity flag
-
-    // TODO: quit?
     let (_tx, rx) = channel();
 
     let peer = Peer::<Connection, SocketAddr>::create(config);

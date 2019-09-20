@@ -35,7 +35,7 @@ impl<C: ConnectionTrait<Address = A>, A: PeerAddr> Procedures<C, A> {
     /// beginning with `peer_addr` which could be taken from a finger table.
     pub fn find_peer(&self, identifier: Identifier, peer_addr: A) -> crate::Result<A> {
         debug!("Finding peer for identifier {}", identifier);
-        // TODO use successors from list if PeerNotFound
+
         let mut con = C::open(peer_addr, self.timeout)?;
         let peer_find = PeerFind { identifier };
         con.send(Message::PeerFind(peer_find))?;
@@ -102,8 +102,7 @@ impl<C: ConnectionTrait<Address = A>, A: PeerAddr> Procedures<C, A> {
 
         if let Message::StoragePutSuccess(_) = msg {
             info!(
-                "Value for key {} succe
-        let peers: Vec<&Routing<A>> = peers.iter().collect();ssfully stored at peer {}",
+                "Value for key {} successfully stored at peer {}",
                 key, peer_addr
             );
 
