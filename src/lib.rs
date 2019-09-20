@@ -71,7 +71,6 @@ use crate::handler::{ApiHandler, P2PHandler};
 use crate::network::ConnectionTrait;
 use crate::network::{PeerAddr, Server};
 use crate::routing::Routing;
-use crate::handler::Storage;
 use crate::stabilization::{Bootstrap, Stabilization};
 use std::error::Error;
 use std::fmt::Display;
@@ -87,7 +86,7 @@ pub mod network;
 pub mod procedures;
 pub mod routing;
 pub mod stabilization;
-pub mod storage;
+pub mod key;
 
 pub type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
@@ -99,7 +98,7 @@ where
 {
     config: Config<A>,
     routing: Arc<Mutex<Routing<A>>>,
-    p2p_handler: Arc<P2PHandler<A>>,
+    p2p_handler: Arc<P2PHandler<C, A>>,
     api_handler: Arc<ApiHandler<C, A>>,
 }
 
@@ -111,8 +110,8 @@ where
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Peer {{ routing: {:?}, storage: {:?} }}",
-            self.routing, self.p2p_handler
+            "Peer {{ routing: {:?} }}",
+            self.routing
         )
     }
 }
@@ -127,16 +126,16 @@ where
             let finger_table = vec![config.listen_address; config.fingers];
             Routing::new(
                 config.listen_address,
-                Some(config.listen_address),
+                config.listen_address,
                 config.listen_address,
                 finger_table,
+                false
             )
         };
 
         let routing = Arc::new(Mutex::new(routing));
-        let storage = Arc::new(Mutex::new(Storage::new()));
 
-        let p2p_handler = Arc::new(P2PHandler::new(Arc::clone(&routing), Arc::clone(&storage)));
+        let p2p_handler = Arc::new(P2PHandler::new(Arc::clone(&routing), config.timeout));
         let api_handler = Arc::new(ApiHandler::new(Arc::clone(&routing), config.timeout));
 
         Ok(Peer {
@@ -166,9 +165,9 @@ where
             *routing = bootstrap.bootstrap(config.timeout)?
         }
 
-        let p2p_server = Server::from_arc(&self.p2p_handler);
+        let p2p_server: Server<P2PHandler<C, A>>= Server::from_arc(&self.p2p_handler);
         //let p2p_server = Server::new(Arc::clone(&self.p2p_handler));
-        let p2p_handle = p2p_server.listen::<A, C>(config.listen_address, config.worker_threads)?;
+        let p2p_handle = p2p_server.listen(config.listen_address, config.worker_threads)?;
 
         let api_server: Server<ApiHandler<C, A>> = Server::from_arc(&self.api_handler);
         let api_handle = api_server.listen(config.api_address, 1)?;
@@ -208,10 +207,8 @@ impl<C: ConnectionTrait<Address = A>, A: PeerAddr + Display + Sync> Display for 
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let routing = self.routing.lock().unwrap();
         let addr: A = *routing.current;
-        let pred = match routing.predecessor {
-            None => "None".to_string(),
-            Some (p) => p.to_string(),
-        };
+        let pred = *routing.predecessor;
+
         let succ: Vec<A> = routing.successor.iter().map(|x| **x).collect();
         let fingers: Vec<A> = routing.finger_table.clone().into_iter().map(|x| *x).collect();
         let storage = fingers.clone();

@@ -4,31 +4,40 @@ use crate::message::Message;
 use crate::network::{ConnectionTrait, PeerAddr, ServerHandler};
 use crate::routing::identifier::Identifier;
 use crate::routing::Routing;
-use crate::storage::Key;
 use std::collections::HashMap;
 use std::error::Error;
 use std::io;
 use std::sync::{Arc, Mutex};
 use std::collections::HashSet;
 use std::iter::FromIterator;
-use crate::routing::identifier::Identify;
+use std::marker::PhantomData;
+use crate::procedures::Procedures;
 
-pub type Storage = HashMap<Key, Vec<u8>>;
+type Storage = HashMap<Identifier, Vec<u8>>;
 
 /// Handler for peer-to-peer requests
 ///
 /// The supported incoming peer-to-peer messages are `STORAGE GET`,
 /// `STORAGE PUT`, `PEER FIND`, `PREDECESSOR GET` and `PREDECESSOR SET`.
 #[derive(Debug)]
-pub struct P2PHandler<A> {
+pub struct P2PHandler<C, A>
+    where
+        C: ConnectionTrait<Address = A>,
+        A: PeerAddr, {
     routing: Arc<Mutex<Routing<A>>>,
     storage: Arc<Mutex<Storage>>,
+    procedures: Procedures<C, A>,
+    p: PhantomData<Mutex<C>>,
 }
 
-impl<A: PeerAddr> P2PHandler<A> {
+impl<C, A> P2PHandler<C, A> where
+    C: ConnectionTrait<Address=A>,
+    A: PeerAddr, {
     /// Creates a new `P2PHandler` instance.
-    pub fn new(routing: Arc<Mutex<Routing<A>>>, storage: Arc<Mutex<Storage>>) -> Self {
-        Self { routing, storage }
+    pub fn new(routing: Arc<Mutex<Routing<A>>>, timeout: u64) -> Self {
+        let procedures = Procedures::new(timeout);
+        let storage = Arc::new(Mutex::new(Storage::new()));
+        Self { routing, storage, procedures, p: PhantomData }
     }
 
     fn closest_preceding_peer(&self, identifier: Identifier) -> A {
@@ -37,25 +46,48 @@ impl<A: PeerAddr> P2PHandler<A> {
         **routing.closest_preceding_peer(identifier)
     }
 
-    fn notify_predecessor(&self, predecessor_addr: A) {
-        let mut routing = self.routing.lock().unwrap();
-
-        match routing.predecessor {
-            None =>
-                routing.set_predecessor(Some(predecessor_addr)),
-            Some(predecessor) if predecessor_addr.identifier().is_between(&predecessor.identifier(), &routing.current.identifier()) =>
-                routing.set_predecessor(Some(predecessor_addr)),
-            _ => (),
-        };
+    fn key_range(&self, start: &Identifier, end: &Identifier) -> Vec<Identifier> {
+        self.storage.lock().unwrap()
+            .keys()
+            .filter(|k| k.is_between_end(start, end))
+            .map(|i| i.clone())
+            .collect()
     }
 
-    fn get_from_storage(&self, key: Key) -> Option<Vec<u8>> {
+    fn notify_predecessor(&self, new_predecessor: A) {
+        let (predecessor, current) = {
+            let routing = self.routing.lock().unwrap();
+            (routing.predecessor, routing.current)
+        };
+
+        if self.routing.lock().unwrap().get_predecessor_failed() {
+            // old predecessor failed, we get a new predecessor:
+            // keys in range (predecessor, new_predecessor) are redistributed from self to the
+            // new predecessor (empty if new predecessor further away)
+            let new_pred_keys = self.key_range(&predecessor.identifier(), &new_predecessor.identifier());
+            self.put_keys(new_predecessor, &new_pred_keys);
+            self.routing.lock().unwrap().set_predecessor(new_predecessor);
+        } else {
+            let predecessor = self.routing.lock().unwrap().predecessor;
+            if new_predecessor.identifier().is_between(&predecessor.identifier(), &current.identifier()) {
+                // node join -> set new predecessor
+                self.routing.lock().unwrap().set_predecessor(new_predecessor);
+                let new_pred_keys = self.key_range(&new_predecessor.identifier(), &predecessor.identifier());
+                self.put_keys(new_predecessor, &new_pred_keys);
+                if let Some(last_succ) = self.routing.lock().unwrap().last_successor() {
+                    self.remove_keys(**last_succ, &new_pred_keys);
+                }
+            }
+        }
+    }
+
+    fn get_from_storage(&self, key: Identifier) -> Option<Vec<u8>> {
         let storage = self.storage.lock().unwrap();
 
         storage.get(&key).map(Vec::clone)
     }
 
-    fn put_to_storage(&self, key: Key, value: Vec<u8>) -> bool {
+    fn put_to_storage(&self, key: Identifier, value: Vec<u8>) -> bool {
         let mut storage = self.storage.lock().unwrap();
 
         if storage.contains_key(&key) {
@@ -67,18 +99,12 @@ impl<A: PeerAddr> P2PHandler<A> {
         true
     }
 
-    fn handle_storage_get<C: ConnectionTrait<Address=A>>(
+    fn handle_storage_get(
         &self,
         mut con: C,
         storage_get: StorageGet,
     ) -> crate::Result<()> {
-        let raw_key = storage_get.raw_key;
-        let replication_index = storage_get.replication_index;
-
-        let key = Key {
-            raw_key,
-            replication_index,
-        };
+        let key = storage_get.key;
 
         info!("Received STORAGE GET request for key {}", key);
 
@@ -94,14 +120,14 @@ impl<A: PeerAddr> P2PHandler<A> {
                 key
             );
 
-            Message::StorageGetSuccess(StorageGetSuccess { raw_key, value })
+            Message::StorageGetSuccess(StorageGetSuccess { key, value })
         } else {
             info!(
                 "Did not find value for key {} and replying with STORAGE FAILURE",
                 key
             );
 
-            Message::StorageFailure(StorageFailure { raw_key })
+            Message::StorageFailure(StorageFailure { key })
         };
 
         // 3. reply with STORAGE GET SUCCESS or STORAGE FAILURE
@@ -111,18 +137,12 @@ impl<A: PeerAddr> P2PHandler<A> {
         Ok(())
     }
 
-    fn handle_storage_put<C: ConnectionTrait<Address=A>>(
+    fn handle_storage_put(
         &self,
         mut con: C,
         storage_put: StoragePut,
     ) -> crate::Result<()> {
-        let raw_key = storage_put.raw_key;
-        let replication_index = storage_put.replication_index;
-
-        let key = Key {
-            raw_key,
-            replication_index,
-        };
+        let key = storage_put.key;
 
         info!("Received STORAGE PUT request for key {}", key);
 
@@ -136,14 +156,14 @@ impl<A: PeerAddr> P2PHandler<A> {
                 key
             );
 
-            Message::StoragePutSuccess(StoragePutSuccess { raw_key })
+            Message::StoragePutSuccess(StoragePutSuccess { key })
         } else {
             info!(
                 "Value for key {} already exists, thus replying with STORAGE FAILURE",
                 key
             );
 
-            Message::StorageFailure(StorageFailure { raw_key })
+            Message::StorageFailure(StorageFailure { key })
         };
 
         // 3. reply with STORAGE PUT SUCCESS or STORAGE FAILURE
@@ -153,9 +173,7 @@ impl<A: PeerAddr> P2PHandler<A> {
         Ok(())
     }
 
-    fn handle_peer_find<C>(&self, mut con: C, peer_find: PeerFind) -> crate::Result<()>
-        where
-            C: ConnectionTrait<Address=A>,
+    fn handle_peer_find(&self, mut con: C, peer_find: PeerFind) -> crate::Result<()>
     {
         let (current, successor) = {
             let routing = self.routing.lock().unwrap();
@@ -206,17 +224,17 @@ impl<A: PeerAddr> P2PHandler<A> {
         Ok(())
     }
 
-    fn handle_successors_request<C>(
+    fn handle_successors_request(
         &self,
-        mut con: C) -> crate::Result<()>
-        where
-            C: ConnectionTrait<Address=A>, {
+        mut con: C) -> crate::Result<()> {
         let routing = self.routing.lock().unwrap();
         let mut successors = routing.successor.iter().map(|x| **x).collect();
-        let mut successors_pred = match routing.predecessor {
-            None => vec![],
-            Some(p) => vec![*p],
+        let mut successors_pred = if routing.get_predecessor_failed() {
+            vec![]
+        } else {
+           vec![*routing.predecessor]
         };
+
         successors_pred.push(*routing.current);
         successors_pred.append(&mut successors);
         let successor_reply = SuccessorsReply {
@@ -237,52 +255,54 @@ impl<A: PeerAddr> P2PHandler<A> {
         Ok(())
     }
 
-    fn handle_successor_changes<C>(
+    fn put_keys(&self, peer_addr: A, keys: &Vec<Identifier>) {
+        if !keys.is_empty() {
+            let connect = C::open(peer_addr, 3600);
+            let msg = Message::KeyPut(KeyPut { keys: keys.clone() });
+            if let Err(_) = connect.and_then(|mut con| con.send(msg)) {
+                info!("Failed to notify {} about keys it is responsible for.", peer_addr);
+            }
+        }
+    }
+
+    fn remove_keys(&self, peer_addr: A, keys: &Vec<Identifier>) {
+        if !keys.is_empty() {
+            let connect = C::open(peer_addr, 3600);
+            let msg = Message::KeyRemove(KeyRemove { keys: keys.clone() });
+            if let Err(_) = connect.and_then(|mut con| con.send(msg)) {
+                info!("Failed to notify {} about keys it is no longer responsible for.", peer_addr);
+            }
+        }
+    }
+
+    fn handle_successor_changes(
         &self,
-        _con: C,
         successor_changes: SuccessorListChanges<A>,
     ) -> crate::Result<()>
-        where
-        C: ConnectionTrait<Address=A>
     {
         let old_successors_set: HashSet<_> = HashSet::from_iter(successor_changes.old_successors.iter().map(|i| *i).clone());
         let new_successors_set: HashSet<_> = HashSet::from_iter(successor_changes.new_successors.iter().map(|i| *i).clone());
 
-
         let own_keys: Vec<Identifier> = self.storage.lock().unwrap()
             .keys()
-            .filter(|k| self.routing.lock().unwrap().responsible_for(k.identifier()))
-            .map(|k| k.identifier())
+            .filter(|k| self.routing.lock().unwrap().responsible_for(**k))
+            .map(|k| k.clone())
             .collect();
 
         // all peers that are not in the successors list anymore
         for peer in old_successors_set.difference(&new_successors_set) {
-            // send KeyRemove to this peer
-            //let keys = self.procedures
-            let connect = C::open(*peer, 3600);
-            let msg = Message::KeyRemove(KeyRemove { keys: own_keys.clone() });
-            if let Err(_) = connect.and_then(|mut con| con.send(msg)) {
-                info!("Failed to notify {} about keys it is no longer responsible for.", *peer);
-            }
+            self.remove_keys(*peer, &own_keys);
         }
 
         // all peers that are new in the successors list
         for peer in new_successors_set.difference(&old_successors_set) {
-            // send KeyPut to this peer
-
-            let connect = C::open(*peer, 3600);
-            let msg = Message::KeyPut(KeyPut { keys: own_keys.clone() });
-            if let Err(_) = connect.and_then(|mut con| con.send(msg)) {
-                info!("Failed to notify {} about keys it is responsible for.", *peer);
-            }
+            self.put_keys(*peer, &own_keys);
         }
 
         Ok(())
     }
 
-    fn handle_connection<C>(&self, mut con: C) -> crate::Result<()>
-        where
-            C: ConnectionTrait<Address=A>,
+    fn handle_connection(&self, mut con: C) -> crate::Result<()>
     {
         let msg = con.receive()?;
 
@@ -292,15 +312,43 @@ impl<A: PeerAddr> P2PHandler<A> {
             Message::StorageGet(storage_get) => self.handle_storage_get(con, storage_get),
             Message::StoragePut(storage_put) => self.handle_storage_put(con, storage_put),
             Message::PeerFind(peer_find) => self.handle_peer_find(con, peer_find),
-            Message::SuccessorsRequest() => self.handle_successors_request(con),
+            Message::SuccessorsRequest(_) => self.handle_successors_request(con),
             Message::PredecessorNotify(predecessor_get) => {
                 self.handle_predecessor_notify(predecessor_get)
             }
             Message::SuccessorlistChanges(successor_changes) => {
-                self.handle_successor_changes(con, successor_changes)
+                self.handle_successor_changes(successor_changes)
             }
+            Message::KeyPut(put_keys) =>
+                self.handle_put_keys(put_keys),
+            Message::KeyRemove(remove_keys) =>
+                self.handle_remove_keys(remove_keys),
             _ => Err(Box::new(MessageError::new(msg))),
         }
+    }
+
+    fn handle_remove_keys(&self, remove_keys: KeyRemove) -> crate::Result<()> {
+        let mut storage = self.storage.lock().unwrap();
+
+        for key in remove_keys.keys {
+            storage.remove(&key);
+        }
+
+        Ok(())
+    }
+
+    fn handle_put_keys(&self, put_keys: KeyPut) -> crate::Result<()> {
+        // TODO: implement concurrency
+        for key in put_keys.keys {
+            if !self.storage.lock().unwrap().contains_key(&key) {
+                let next = self.routing.lock().unwrap().closest_preceding_peer(key).clone();
+                if let Ok(Some(value)) = self.procedures.dht_get(key, *next) {
+                    self.put_to_storage(key, value);
+                }
+            }
+        }
+
+        Ok(())
     }
 
     fn handle_error(&self, error: &dyn Error) {
@@ -308,7 +356,7 @@ impl<A: PeerAddr> P2PHandler<A> {
     }
 }
 
-impl<A, C> ServerHandler<C> for P2PHandler<A>
+impl<A, C> ServerHandler<C> for P2PHandler<C, A>
     where
         C: ConnectionTrait<Address=A>,
         A: PeerAddr,

@@ -6,7 +6,7 @@ use crate::network::{PeerAddr, ServerHandler};
 use crate::procedures::Procedures;
 use crate::routing::identifier::{Identifier, Identify};
 use crate::routing::Routing;
-use crate::storage::Key;
+use crate::key::Key;
 use std::error::Error;
 use std::io;
 use std::sync::{Arc, Mutex};
@@ -49,15 +49,14 @@ impl<A: PeerAddr, C: ConnectionTrait<Address = A>> ApiHandler<C, A> {
 
     fn handle_dht_get(&self, mut api_con: C, dht_get: DhtGet) -> crate::Result<()> {
         // iterate through all replication indices
+        // TODO: use replication index
         for i in 0..u8::MAX {
             let key = Key {
                 raw_key: dht_get.key,
                 replication_index: i,
             };
 
-            let peer_addr = self.find_peer(key.identifier())?;
-
-            if let Some(value) = self.procedures.get_value(peer_addr, key)? {
+            if let Some(value) = self.procedures.dht_get(key.identifier(), self.closest_preceding_peer(key.identifier()))? {
                 let dht_success = DhtSuccess {
                     key: dht_get.key,
                     value,
@@ -86,7 +85,7 @@ impl<A: PeerAddr, C: ConnectionTrait<Address = A>> ApiHandler<C, A> {
             let peer_addr = self.find_peer(key.identifier())?;
 
             self.procedures
-                .put_value(peer_addr, key, dht_put.ttl, dht_put.value.clone())?;
+                .put_value(peer_addr, key.identifier(), dht_put.ttl, dht_put.value.clone())?;
         }
 
         Ok(())

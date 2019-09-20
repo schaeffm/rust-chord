@@ -1,25 +1,25 @@
 //! A collection of procedures used in various places.
 
 use crate::error::MessageError;
-use crate::message::p2p::{PeerFind, PredecessorNotify, StorageGet, StoragePut, SuccessorListChanges};
+use crate::message::p2p::{PeerFind, PredecessorNotify, StorageGet, StoragePut, SuccessorListChanges, SuccessorsRequest};
 use crate::message::Message;
 use crate::network::ConnectionTrait;
 use crate::network::PeerAddr;
 use crate::routing::identifier::{Identifier, IdentifierValue};
-use crate::storage::Key;
 use std::marker::PhantomData;
 use std::sync::Mutex;
 
+#[derive(Debug)]
 pub struct Procedures<C, A>
-where
-    C: ConnectionTrait<Address = A>,
-    A: PeerAddr,
+    where
+        C: ConnectionTrait<Address=A>,
+        A: PeerAddr,
 {
     timeout: u64,
     p: PhantomData<Mutex<C>>,
 }
 
-impl<C: ConnectionTrait<Address = A>, A: PeerAddr> Procedures<C, A> {
+impl<C: ConnectionTrait<Address=A>, A: PeerAddr> Procedures<C, A> {
     pub fn new(timeout: u64) -> Self {
         Self {
             timeout,
@@ -34,34 +34,31 @@ impl<C: ConnectionTrait<Address = A>, A: PeerAddr> Procedures<C, A> {
     pub fn find_peer(&self, identifier: Identifier, peer_addr: A) -> crate::Result<A> {
         debug!("Finding peer for identifier {}", identifier);
         // TODO use successors from list if PeerNotFound
-            let mut con = C::open(peer_addr, self.timeout)?;
-            let peer_find = PeerFind { identifier };
-            con.send(Message::PeerFind(peer_find))?;
-            let msg = con.receive()?;
+        let mut con = C::open(peer_addr, self.timeout)?;
+        let peer_find = PeerFind { identifier };
+        con.send(Message::PeerFind(peer_find))?;
+        let msg = con.receive()?;
 
-            if let Message::PeerFound(peer_found) = msg {
-                debug!(
-                    "Peer found for identifier {} with address {}",
-                    identifier, peer_found.socket_addr
-                );
+        if let Message::PeerFound(peer_found) = msg {
+            debug!(
+                "Peer found for identifier {} with address {}",
+                identifier, peer_found.socket_addr
+            );
 
-                Ok(peer_found.socket_addr)
-            } else {
-                Err(Box::new(MessageError::new(msg)))
-            }
+            Ok(peer_found.socket_addr)
+        } else {
+            Err(Box::new(MessageError::new(msg)))
+        }
     }
 
     /// Send a storage get message to a peer with the objective to find a value for a given key.
     ///
     /// Opens a P2P connection to `peer_addr` and sends a STORAGE GET message to retrieve a value for
     /// `key` depending on the reply.
-    pub fn get_value(&self, peer_addr: A, key: Key) -> crate::Result<Option<Vec<u8>>> {
+    pub fn get_value(&self, peer_addr: A, key: Identifier) -> crate::Result<Option<Vec<u8>>> {
         debug!("Get value for key {} from peer {}", key, peer_addr);
 
-        let storage_get = StorageGet {
-            replication_index: key.replication_index,
-            raw_key: key.raw_key,
-        };
+        let storage_get = StorageGet { key };
 
         let mut p2p_con = C::open(peer_addr, 3600)?;
         p2p_con.send(Message::StorageGet(storage_get))?;
@@ -85,13 +82,12 @@ impl<C: ConnectionTrait<Address = A>, A: PeerAddr> Procedures<C, A> {
     /// Put a value for a given key into the distributed hash table.
     ///
     /// Opens a P2P connection to `peer_addr` and sends a STORAGE PUT message to store `value` under `key`.
-    pub fn put_value(&self, peer_addr: A, key: Key, ttl: u16, value: Vec<u8>) -> crate::Result<()> {
+    pub fn put_value(&self, peer_addr: A, key: Identifier, ttl: u16, value: Vec<u8>) -> crate::Result<()> {
         debug!("Put value for key {} to peer {}", key, peer_addr);
 
         let storage_put = StoragePut {
             ttl,
-            replication_index: key.replication_index,
-            raw_key: key.raw_key,
+            key,
             value,
         };
 
@@ -139,7 +135,7 @@ impl<C: ConnectionTrait<Address = A>, A: PeerAddr> Procedures<C, A> {
 
         let mut con = C::open(peer_addr, self.timeout)?;
 
-        con.send(Message::SuccessorsRequest())?;
+        con.send(Message::SuccessorsRequest(SuccessorsRequest {}))?;
 
         let msg = con.receive()?;
 
@@ -167,5 +163,10 @@ impl<C: ConnectionTrait<Address = A>, A: PeerAddr> Procedures<C, A> {
         if let Err(_) = connect.and_then(|mut con| con.send(reply)) {
             info!("Failed to update own successors {}", socket_addr);
         }
+    }
+
+    pub fn dht_get(&self, key: Identifier, addr: A) -> crate::Result<Option<Vec<u8>>> {
+        let peer_addr = self.find_peer(key, addr)?;
+        self.get_value(peer_addr, key)
     }
 }

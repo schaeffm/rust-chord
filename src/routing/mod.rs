@@ -24,33 +24,37 @@ pub mod identifier;
 #[derive(Debug, Clone)]
 pub struct Routing<T> {
     pub current: IdentifierValue<T>,
-    // TODO should maybe be an Option
-    pub predecessor: Option<IdentifierValue<T>>,
-    // TODO use BinaryHeap for multiple successors
+    pub predecessor: IdentifierValue<T>,
     pub successor: Vec<IdentifierValue<T>>,
-    // TODO
     pub finger_table: Vec<IdentifierValue<T>>,
+    predecessor_failed: bool,
 }
 
 impl<T: Identify + Copy + Clone> Routing<T> {
     /// Creates a new `Routing` instance for the given initial values.
-    pub fn new(current: T, predecessor: Option<T>, successor: T, finger_table: Vec<T>) -> Self {
-        let predecessor = match predecessor {
-            Some(p) => Some(IdentifierValue::new(p)),
-            None => None,
-        };
+    pub fn new(current: T, predecessor: T, successor: T, finger_table: Vec<T>, predecessor_failed: bool) -> Self {
 
         Self {
             current: IdentifierValue::new(current),
-            predecessor: predecessor,
+            predecessor: IdentifierValue::new(predecessor),
             successor: vec![IdentifierValue::new(successor)],
             finger_table: finger_table.into_iter().map(IdentifierValue::new).collect(),
+            predecessor_failed,
         }
     }
 
+    pub fn get_predecessor_failed(&self) -> bool {
+        self.predecessor_failed
+    }
+
+    pub fn set_predecessor_failed(&mut self) {
+        self.predecessor_failed = true;
+    }
+
     /// Sets the predecessor's address.
-    pub fn set_predecessor(&mut self, new_pred: Option<T>) {
-        self.predecessor = new_pred.map(IdentifierValue::new);
+    pub fn set_predecessor(&mut self, new_pred:T) {
+        self.predecessor_failed = false;
+        self.predecessor = IdentifierValue::new(new_pred);
     }
 
     pub fn set_successors(&mut self, new_succs: Vec<IdentifierValue<T>>) {
@@ -76,11 +80,7 @@ impl<T: Identify + Copy + Clone> Routing<T> {
 
     /// Checks whether this peer is responsible for the given identifier.
     pub fn responsible_for(&self, identifier: Identifier) -> bool {
-        if let Some(predecessor) = self.predecessor {
-            identifier.is_between(&predecessor.identifier(), &self.current.identifier())
-        } else {
-            false
-        }
+            identifier.is_between_end(&self.predecessor.identifier(), &self.current.identifier())
     }
 
     /// Returns the peer closest to the given identifier.
@@ -91,6 +91,11 @@ impl<T: Identify + Copy + Clone> Routing<T> {
             }
         }
         return self.successor.first().unwrap();
+    }
+
+    pub fn last_successor(&self) -> Option<&IdentifierValue<T>> {
+        // TODO: do not hardcode 4 here
+        return self.successor.get(3);
     }
 
     pub fn preds_consistent(_peers: Vec<Self>) -> bool {

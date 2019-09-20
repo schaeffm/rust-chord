@@ -14,7 +14,7 @@
 //! [`Identify`]: trait.Identify.html
 //! [`IdentifierValue`]: struct.IdentifierValue.html
 
-use crate::storage::Key;
+use crate::key::Key;
 use bigint::U256;
 use sha2::{Sha256, Digest};
 use std::fmt;

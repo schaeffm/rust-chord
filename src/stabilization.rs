@@ -50,14 +50,15 @@ impl<A: PeerAddr, C: ConnectionTrait<Address=A>> Bootstrap<C, A> {
         let current_id = self.current_addr.identifier();
 
         let successor = procedures.find_peer(current_id, self.boot_addr)?;
-        let predecessor = None;
+        let predecessor = &self.current_addr;
         let finger_table = vec![self.current_addr; self.fingers];
 
         Ok(Routing::new(
             self.current_addr,
-            predecessor,
+            *predecessor,
             successor,
             finger_table,
+            true,
         ))
     }
 }
@@ -72,7 +73,6 @@ pub struct Stabilization<C, A>
 {
     procedures: Procedures<C, A>,
     routing: Arc<Mutex<Routing<A>>>,
-
 }
 
 impl<C: ConnectionTrait<Address=A>, A: PeerAddr> Stabilization<C, A> {
@@ -96,15 +96,13 @@ impl<C: ConnectionTrait<Address=A>, A: PeerAddr> Stabilization<C, A> {
     pub fn stabilize(&mut self) -> crate::Result<()> {
         info!("Stabilizing routing information");
 
-        let update_successors = self.update_successors();
-        //println!("Peer {:?} done updating succ", *self.routing.lock().unwrap().current);
-        //println!("Current routing information:\n\n{:#?}", *self.routing.lock().unwrap());
-        let update_fingers = self.update_fingers();
+        self.check_predecessor();
 
+        let update_successors = self.update_successors();
+        let update_fingers = self.update_fingers();
         let routing = self.routing.lock().unwrap();
 
         debug!("Current routing information:\n\n{:#?}", *routing);
-        //println!("Peer {:?} done stabilizing", *routing.current);
         update_successors.and(update_fingers)
     }
 
@@ -126,10 +124,10 @@ impl<C: ConnectionTrait<Address=A>, A: PeerAddr> Stabilization<C, A> {
             self.procedures.notify(*current, **succ);
         }
 
-        let a = successors.iter().map(|i| **i).collect();
-        let b = new_successors.iter().map(|i| **i).collect();
+        let ids_old = successors.iter().map(|i| **i).collect();
+        let ids_new = new_successors.iter().map(|i| **i).collect();
 
-        self.procedures.send_successor_changes(*current, a, b);
+        self.procedures.send_successor_changes(*current, ids_old, ids_new);
 
         self.routing.lock().unwrap().set_successors(new_successors);
         Ok(())
@@ -155,5 +153,22 @@ impl<C: ConnectionTrait<Address=A>, A: PeerAddr> Stabilization<C, A> {
         }
 
         Ok(())
+    }
+
+    fn check_predecessor(&self) {
+        if self.predecessor_failed() {
+            self.routing.lock().unwrap().set_predecessor_failed();
+        }
+    }
+
+    fn predecessor_failed(&self) -> bool {
+        if self.routing.lock().unwrap().get_predecessor_failed() {
+            true
+        } else if C::open(*self.routing.lock().unwrap().predecessor, 3600).is_err() {
+            self.routing.lock().unwrap().set_predecessor_failed();
+            true
+        } else {
+            false
+        }
     }
 }
