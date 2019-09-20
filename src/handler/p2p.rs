@@ -60,8 +60,8 @@ where
             .lock()
             .unwrap()
             .keys()
+            .cloned()
             .filter(|k| k.is_between_end(start, end))
-            .map(|i| i.clone())
             .collect()
     }
 
@@ -72,7 +72,9 @@ where
         };
 
         let failed = self.routing.lock().unwrap().get_predecessor_failed();
+
         if failed && predecessor.identifier() == current.identifier() {
+            // only occurs right after joining the network
             self.routing
                 .lock()
                 .unwrap()
@@ -83,21 +85,15 @@ where
                 .is_between(&new_predecessor.identifier(), &current.identifier())
         {
             // old predecessor failed, we get a new predecessor:
-            // keys in range (predecessor, new_predecessor) are redistributed from self to the
-            // new predecessor (empty if new predecessor further away)
+            // keys in range (new_predecessor, predecessor) are sent to all successors
 
-            //if predecessor.identifier() != current.identifier() {
             let new_pred_keys =
                 self.key_range(&new_predecessor.identifier(), &predecessor.identifier());
 
-            for succ in self.routing.lock().unwrap().successor.clone() {
-                println!(
-                    "{} sends a put_keys message (pred failed) to {:?} containing {:?}",
-                    *current, succ, &new_pred_keys
-                );
-                self.put_keys(*succ, &new_pred_keys);
+            for successor in self.routing.lock().unwrap().successor.clone() {
+                self.put_keys(*successor, &new_pred_keys);
             }
-            //}
+
             self.routing
                 .lock()
                 .unwrap()
@@ -116,11 +112,10 @@ where
                 let new_pred_keys =
                     self.key_range(&predecessor.identifier(), &new_predecessor.identifier());
                 self.put_keys(new_predecessor, &new_pred_keys);
+
+                // The last item in the successor is no longer required to store keys transfered to
+                // the new predecessor
                 if let Some(last_succ) = self.routing.lock().unwrap().last_successor() {
-                    println!(
-                        "{} sends a remove key message (pred changed) to {:?} containing {:?}",
-                        *current, **last_succ, &new_pred_keys
-                    );
                     self.remove_keys(**last_succ, &new_pred_keys);
                 }
             }
@@ -150,10 +145,7 @@ where
 
         info!("Received STORAGE GET request for key {}", key);
 
-        // 1. check if given key falls into range
-        // FIXME?
-        //if self.responsible_for(key.identifier()) {
-        // 2. find value for given key
+        // 1. find value for given key (even if not responsible)
         let value_opt = self.get_from_storage(key);
 
         let msg = if let Some(value) = value_opt {
@@ -172,9 +164,8 @@ where
             Message::StorageFailure(StorageFailure { key })
         };
 
-        // 3. reply with STORAGE GET SUCCESS or STORAGE FAILURE
+        // 2. reply with STORAGE GET SUCCESS or STORAGE FAILURE
         con.send(msg)?;
-        //}
 
         Ok(())
     }
@@ -184,7 +175,7 @@ where
 
         info!("Received STORAGE PUT request for key {}", key);
 
-        // 2. save value for given key
+        // 1. save value for given key (even if not responsible)
         let msg = if self.put_to_storage(key, storage_put.value.clone()) {
             info!(
                 "Stored value for key {} and replying with STORAGE PUT SUCCESS",
@@ -201,7 +192,7 @@ where
             Message::StorageFailure(StorageFailure { key })
         };
 
-        // 3. reply with STORAGE PUT SUCCESS or STORAGE FAILURE
+        // 2. reply with STORAGE PUT SUCCESS or STORAGE FAILURE
         con.send(msg)?;
 
         let successors = self.routing.lock().unwrap().successor.clone();
@@ -223,12 +214,8 @@ where
         let (current, successor) = {
             let routing = self.routing.lock().unwrap();
             (
-                routing.current.clone(),
-                routing
-                    .successor
-                    .first()
-                    .ok_or("Empty successor list")?
-                    .clone(),
+                *routing.current,
+                *routing.successor.first().ok_or("Empty successor list")?,
             )
         };
         let identifier = peer_find.identifier;
@@ -303,11 +290,13 @@ where
         Ok(())
     }
 
-    fn put_keys(&self, peer_addr: A, keys: &Vec<Identifier>) {
+    fn put_keys(&self, peer_addr: A, keys: &[Identifier]) {
         if !keys.is_empty() {
             let connect = C::open(peer_addr, 3600);
-            let msg = Message::KeyPut(KeyPut { keys: keys.clone() });
-            if let Err(_) = connect.and_then(|mut con| con.send(msg)) {
+            let msg = Message::KeyPut(KeyPut {
+                keys: keys.to_vec(),
+            });
+            if connect.and_then(|mut con| con.send(msg)).is_err() {
                 info!(
                     "Failed to notify {} about keys it is responsible for.",
                     peer_addr
@@ -316,11 +305,13 @@ where
         }
     }
 
-    fn remove_keys(&self, peer_addr: A, keys: &Vec<Identifier>) {
+    fn remove_keys(&self, peer_addr: A, keys: &[Identifier]) {
         if !keys.is_empty() {
             let connect = C::open(peer_addr, 3600);
-            let msg = Message::KeyRemove(KeyRemove { keys: keys.clone() });
-            if let Err(_) = connect.and_then(|mut con| con.send(msg)) {
+            let msg = Message::KeyRemove(KeyRemove {
+                keys: keys.to_vec(),
+            });
+            if connect.and_then(|mut con| con.send(msg)).is_err() {
                 info!(
                     "Failed to notify {} about keys it is no longer responsible for.",
                     peer_addr
@@ -334,11 +325,11 @@ where
         successor_changes: SuccessorListChanges<A>,
     ) -> crate::Result<()> {
         let old_successors_set: HashSet<_> =
-            HashSet::from_iter(successor_changes.old_successors.iter().map(|i| *i).clone());
+            HashSet::from_iter(successor_changes.old_successors.iter().cloned());
         let new_successors_set: HashSet<_> =
-            HashSet::from_iter(successor_changes.new_successors.iter().map(|i| *i).clone());
+            HashSet::from_iter(successor_changes.new_successors.iter().cloned());
 
-        let current = self.routing.lock().unwrap().current.clone();
+        let current = self.routing.lock().unwrap().current;
 
         let own_keys: Vec<Identifier> = self
             .storage
@@ -346,7 +337,7 @@ where
             .unwrap()
             .keys()
             .filter(|k| self.routing.lock().unwrap().responsible_for(**k))
-            .map(|k| k.clone())
+            .cloned()
             .collect();
 
         // all peers that are not in the successors list anymore
@@ -416,12 +407,7 @@ where
         // TODO: implement concurrency
         for key in put_keys.keys {
             if !self.storage.lock().unwrap().contains_key(&key) {
-                let next = self
-                    .routing
-                    .lock()
-                    .unwrap()
-                    .closest_preceding_peer(key)
-                    .clone();
+                let next = *self.routing.lock().unwrap().closest_preceding_peer(key);
                 if let Ok(Some(value)) = self.procedures.dht_get(key, *next) {
                     self.put_to_storage(key, value);
                 }
@@ -459,11 +445,9 @@ impl<C: ConnectionTrait<Address = A>, A: PeerAddr + Display + Sync> Display for 
 
         match (routing, storage) {
             (Ok(routing), Ok(storage)) => {
-                let addr = *routing.current;
-
                 let pred = *routing.predecessor;
 
-                let succ: Vec<_> = routing.successor.iter().map(|a| **a).collect();
+                let successors: Vec<_> = routing.successor.iter().map(|a| **a).collect();
                 let fingers: Vec<_> = routing.finger_table.iter().map(|a| **a).collect();
                 write!(
                     f,
@@ -472,12 +456,12 @@ impl<C: ConnectionTrait<Address = A>, A: PeerAddr + Display + Sync> Display for 
                      Fingers: {:?}\n\
                      Storage: {}\n",
                     pred,
-                    succ,
+                    successors,
                     fingers,
                     display_storage(&storage)
                 )
             }
-            _ => write!(f, "Peer locked..."),
+            _ => write!(f, "Peer locked... (probably failed)"),
         }
     }
 }

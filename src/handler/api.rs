@@ -10,7 +10,6 @@ use crate::routing::Routing;
 use std::error::Error;
 use std::io;
 use std::sync::{Arc, Mutex};
-use std::u8;
 
 /// Handler for api requests
 ///
