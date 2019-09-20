@@ -74,20 +74,20 @@ use crate::routing::Routing;
 use crate::stabilization::{Bootstrap, Stabilization};
 use std::error::Error;
 use std::fmt::Display;
+use std::sync::mpsc::{channel, Receiver};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
-use std::sync::mpsc::{channel, Receiver};
 
 pub mod config;
 pub mod error;
 pub mod handler;
+pub mod key;
 pub mod message;
 pub mod network;
 pub mod procedures;
 pub mod routing;
 pub mod stabilization;
-pub mod key;
 
 pub type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
@@ -109,11 +109,7 @@ where
     A: PeerAddr + Sync,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Peer {{ routing: {:?} }}",
-            self.routing
-        )
+        write!(f, "Peer {{ routing: {:?} }}", self.routing)
     }
 }
 
@@ -130,7 +126,7 @@ where
                 config.listen_address,
                 config.listen_address,
                 finger_table,
-                false
+                false,
             )
         };
 
@@ -170,7 +166,7 @@ where
             *routing = bootstrap.bootstrap(config.timeout)?
         }
 
-        let p2p_server: Server<P2PHandler<C, A>>= Server::from_arc(&self.p2p_handler);
+        let p2p_server: Server<P2PHandler<C, A>> = Server::from_arc(&self.p2p_handler);
         //let p2p_server = Server::new(Arc::clone(&self.p2p_handler));
         let p2p_handle = p2p_server.listen(config.listen_address, config.worker_threads, rx_p2p)?;
 
@@ -212,16 +208,16 @@ where
     }
 
     pub fn preds_consistent(peers: Vec<Arc<Self>>) -> bool {
-        let peers: Vec<Routing<A>> = peers.iter().map(|x| x.routing.lock().unwrap().clone()).collect();
+        let peers: Vec<Routing<A>> = peers
+            .iter()
+            .map(|x| x.routing.lock().unwrap().clone())
+            .collect();
         Routing::preds_consistent(peers)
     }
 }
 
 impl<C: ConnectionTrait<Address = A>, A: PeerAddr + Display + Sync> Display for Peer<C, A> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f,
-            "{}",
-               self.p2p_handler
-        )
+        write!(f, "{}", self.p2p_handler)
     }
 }

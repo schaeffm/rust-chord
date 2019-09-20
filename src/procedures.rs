@@ -1,7 +1,9 @@
 //! A collection of procedures used in various places.
 
 use crate::error::MessageError;
-use crate::message::p2p::{PeerFind, PredecessorNotify, StorageGet, StoragePut, SuccessorListChanges, SuccessorsRequest};
+use crate::message::p2p::{
+    PeerFind, PredecessorNotify, StorageGet, StoragePut, SuccessorListChanges, SuccessorsRequest,
+};
 use crate::message::Message;
 use crate::network::ConnectionTrait;
 use crate::network::PeerAddr;
@@ -11,15 +13,15 @@ use std::sync::Mutex;
 
 #[derive(Debug)]
 pub struct Procedures<C, A>
-    where
-        C: ConnectionTrait<Address=A>,
-        A: PeerAddr,
+where
+    C: ConnectionTrait<Address = A>,
+    A: PeerAddr,
 {
     timeout: u64,
     p: PhantomData<Mutex<C>>,
 }
 
-impl<C: ConnectionTrait<Address=A>, A: PeerAddr> Procedures<C, A> {
+impl<C: ConnectionTrait<Address = A>, A: PeerAddr> Procedures<C, A> {
     pub fn new(timeout: u64) -> Self {
         Self {
             timeout,
@@ -82,14 +84,16 @@ impl<C: ConnectionTrait<Address=A>, A: PeerAddr> Procedures<C, A> {
     /// Put a value for a given key into the distributed hash table.
     ///
     /// Opens a P2P connection to `peer_addr` and sends a STORAGE PUT message to store `value` under `key`.
-    pub fn put_value(&self, peer_addr: A, key: Identifier, ttl: u16, value: Vec<u8>) -> crate::Result<()> {
+    pub fn put_value(
+        &self,
+        peer_addr: A,
+        key: Identifier,
+        ttl: u16,
+        value: Vec<u8>,
+    ) -> crate::Result<()> {
         debug!("Put value for key {} to peer {}", key, peer_addr);
 
-        let storage_put = StoragePut {
-            ttl,
-            key,
-            value,
-        };
+        let storage_put = StoragePut { ttl, key, value };
 
         let mut p2p_con = C::open(peer_addr, 3600)?;
         p2p_con.send(Message::StoragePut(storage_put))?;
@@ -130,7 +134,11 @@ impl<C: ConnectionTrait<Address=A>, A: PeerAddr> Procedures<C, A> {
         }
     }
 
-    pub fn get_successors(&self, socket_addr: A, peer_addr: A) -> crate::Result<Vec<IdentifierValue<A>>> {
+    pub fn get_successors(
+        &self,
+        socket_addr: A,
+        peer_addr: A,
+    ) -> crate::Result<Vec<IdentifierValue<A>>> {
         debug!("Getting successors of peer {}", peer_addr);
 
         let mut con = C::open(peer_addr, self.timeout)?;
@@ -143,8 +151,10 @@ impl<C: ConnectionTrait<Address=A>, A: PeerAddr> Procedures<C, A> {
             info!("Successors received from peer {}", peer_addr);
             let mut successors = successors_reply.successors.into_iter().peekable();
             if let Some(fst) = &successors.peek() {
-                if !fst.identifier().
-                    is_between_end(&socket_addr.identifier(), &peer_addr.identifier()) {
+                if !fst
+                    .identifier()
+                    .is_between_end(&socket_addr.identifier(), &peer_addr.identifier())
+                {
                     successors.next();
                 }
             }
@@ -157,9 +167,17 @@ impl<C: ConnectionTrait<Address=A>, A: PeerAddr> Procedures<C, A> {
         }
     }
 
-    pub fn send_successor_changes(&self, socket_addr: A, old_successors: Vec<A>, new_successors: Vec<A>) {
+    pub fn send_successor_changes(
+        &self,
+        socket_addr: A,
+        old_successors: Vec<A>,
+        new_successors: Vec<A>,
+    ) {
         let connect = C::open(socket_addr, self.timeout);
-        let reply = Message::SuccessorlistChanges(SuccessorListChanges { old_successors, new_successors });
+        let reply = Message::SuccessorlistChanges(SuccessorListChanges {
+            old_successors,
+            new_successors,
+        });
         if let Err(_) = connect.and_then(|mut con| con.send(reply)) {
             info!("Failed to update own successors {}", socket_addr);
         }

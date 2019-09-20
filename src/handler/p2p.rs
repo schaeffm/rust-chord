@@ -2,17 +2,17 @@ use crate::error::MessageError;
 use crate::message::p2p::*;
 use crate::message::Message;
 use crate::network::{ConnectionTrait, PeerAddr, ServerHandler};
+use crate::procedures::Procedures;
 use crate::routing::identifier::Identifier;
 use crate::routing::Routing;
 use std::collections::HashMap;
-use std::error::Error;
-use std::io;
-use std::sync::{Arc, Mutex};
 use std::collections::HashSet;
+use std::error::Error;
+use std::fmt::Display;
+use std::io;
 use std::iter::FromIterator;
 use std::marker::PhantomData;
-use crate::procedures::Procedures;
-use std::fmt::Display;
+use std::sync::{Arc, Mutex};
 
 type Storage = HashMap<Identifier, Vec<u8>>;
 
@@ -22,23 +22,31 @@ type Storage = HashMap<Identifier, Vec<u8>>;
 /// `STORAGE PUT`, `PEER FIND`, `PREDECESSOR GET` and `PREDECESSOR SET`.
 #[derive(Debug)]
 pub struct P2PHandler<C, A>
-    where
-        C: ConnectionTrait<Address = A>,
-        A: PeerAddr, {
+where
+    C: ConnectionTrait<Address = A>,
+    A: PeerAddr,
+{
     routing: Arc<Mutex<Routing<A>>>,
     storage: Arc<Mutex<Storage>>,
     procedures: Procedures<C, A>,
     p: PhantomData<Mutex<C>>,
 }
 
-impl<C, A> P2PHandler<C, A> where
-    C: ConnectionTrait<Address=A>,
-    A: PeerAddr, {
+impl<C, A> P2PHandler<C, A>
+where
+    C: ConnectionTrait<Address = A>,
+    A: PeerAddr,
+{
     /// Creates a new `P2PHandler` instance.
     pub fn new(routing: Arc<Mutex<Routing<A>>>, timeout: u64) -> Self {
         let procedures = Procedures::new(timeout);
         let storage = Arc::new(Mutex::new(Storage::new()));
-        Self { routing, storage, procedures, p: PhantomData }
+        Self {
+            routing,
+            storage,
+            procedures,
+            p: PhantomData,
+        }
     }
 
     fn closest_preceding_peer(&self, identifier: Identifier) -> A {
@@ -48,10 +56,12 @@ impl<C, A> P2PHandler<C, A> where
     }
 
     fn key_range(&self, start: &Identifier, end: &Identifier) -> Vec<Identifier> {
-        self.storage.lock().unwrap()
+        self.storage
+            .lock()
+            .unwrap()
             .keys()
+            .cloned()
             .filter(|k| k.is_between_end(start, end))
-            .map(|i| i.clone())
             .collect()
     }
 
@@ -62,31 +72,50 @@ impl<C, A> P2PHandler<C, A> where
         };
 
         let failed = self.routing.lock().unwrap().get_predecessor_failed();
+
         if failed && predecessor.identifier() == current.identifier() {
-            self.routing.lock().unwrap().set_predecessor(new_predecessor);
-        } else if failed && predecessor.identifier().is_between(&new_predecessor.identifier(), &current.identifier()) {
+            // only occurs right after joining the network
+            self.routing
+                .lock()
+                .unwrap()
+                .set_predecessor(new_predecessor);
+        } else if failed
+            && predecessor
+                .identifier()
+                .is_between(&new_predecessor.identifier(), &current.identifier())
+        {
             // old predecessor failed, we get a new predecessor:
-            // keys in range (predecessor, new_predecessor) are redistributed from self to the
-            // new predecessor (empty if new predecessor further away)
+            // keys in range (new_predecessor, predecessor) are sent to all successors
 
-            //if predecessor.identifier() != current.identifier() {
-            let new_pred_keys = self.key_range(&new_predecessor.identifier(), &predecessor.identifier());
+            let new_pred_keys =
+                self.key_range(&new_predecessor.identifier(), &predecessor.identifier());
 
-            for succ in self.routing.lock().unwrap().successor.clone() {
-                println!("{} sends a put_keys message (pred failed) to {:?} containing {:?}", *current, succ, &new_pred_keys);
-                self.put_keys(*succ, &new_pred_keys);
+            for successor in self.routing.lock().unwrap().successor.clone() {
+                self.put_keys(*successor, &new_pred_keys);
             }
-            //}
-            self.routing.lock().unwrap().set_predecessor(new_predecessor);
+
+            self.routing
+                .lock()
+                .unwrap()
+                .set_predecessor(new_predecessor);
         } else {
             let predecessor = self.routing.lock().unwrap().predecessor;
-            if new_predecessor.identifier().is_between(&predecessor.identifier(), &current.identifier()) {
+            if new_predecessor
+                .identifier()
+                .is_between(&predecessor.identifier(), &current.identifier())
+            {
                 // node join -> set new predecessor
-                self.routing.lock().unwrap().set_predecessor(new_predecessor);
-                let new_pred_keys = self.key_range(&predecessor.identifier(), &new_predecessor.identifier());
+                self.routing
+                    .lock()
+                    .unwrap()
+                    .set_predecessor(new_predecessor);
+                let new_pred_keys =
+                    self.key_range(&predecessor.identifier(), &new_predecessor.identifier());
                 self.put_keys(new_predecessor, &new_pred_keys);
+
+                // The last item in the successor is no longer required to store keys transfered to
+                // the new predecessor
                 if let Some(last_succ) = self.routing.lock().unwrap().last_successor() {
-                    println!("{} sends a remove key message (pred changed) to {:?} containing {:?}", *current, **last_succ, &new_pred_keys);
                     self.remove_keys(**last_succ, &new_pred_keys);
                 }
             }
@@ -111,19 +140,12 @@ impl<C, A> P2PHandler<C, A> where
         true
     }
 
-    fn handle_storage_get(
-        &self,
-        mut con: C,
-        storage_get: StorageGet,
-    ) -> crate::Result<()> {
+    fn handle_storage_get(&self, mut con: C, storage_get: StorageGet) -> crate::Result<()> {
         let key = storage_get.key;
 
         info!("Received STORAGE GET request for key {}", key);
 
-        // 1. check if given key falls into range
-        // FIXME?
-        //if self.responsible_for(key.identifier()) {
-        // 2. find value for given key
+        // 1. find value for given key (even if not responsible)
         let value_opt = self.get_from_storage(key);
 
         let msg = if let Some(value) = value_opt {
@@ -142,23 +164,18 @@ impl<C, A> P2PHandler<C, A> where
             Message::StorageFailure(StorageFailure { key })
         };
 
-        // 3. reply with STORAGE GET SUCCESS or STORAGE FAILURE
+        // 2. reply with STORAGE GET SUCCESS or STORAGE FAILURE
         con.send(msg)?;
-        //}
 
         Ok(())
     }
 
-    fn handle_storage_put(
-        &self,
-        mut con: C,
-        storage_put: StoragePut,
-    ) -> crate::Result<()> {
+    fn handle_storage_put(&self, mut con: C, storage_put: StoragePut) -> crate::Result<()> {
         let key = storage_put.key;
 
         info!("Received STORAGE PUT request for key {}", key);
 
-        // 2. save value for given key
+        // 1. save value for given key (even if not responsible)
         let msg = if self.put_to_storage(key, storage_put.value.clone()) {
             info!(
                 "Stored value for key {} and replying with STORAGE PUT SUCCESS",
@@ -175,25 +192,31 @@ impl<C, A> P2PHandler<C, A> where
             Message::StorageFailure(StorageFailure { key })
         };
 
-        // 3. reply with STORAGE PUT SUCCESS or STORAGE FAILURE
+        // 2. reply with STORAGE PUT SUCCESS or STORAGE FAILURE
         con.send(msg)?;
 
         let successors = self.routing.lock().unwrap().successor.clone();
         if self.routing.lock().unwrap().responsible_for(key) {
             for succ in successors {
-                self.procedures.put_value(*succ, key, storage_put.ttl, storage_put.value.clone())?;
+                self.procedures.put_value(
+                    *succ,
+                    key,
+                    storage_put.ttl,
+                    storage_put.value.clone(),
+                )?;
             }
         }
 
         Ok(())
     }
 
-    fn handle_peer_find(&self, mut con: C, peer_find: PeerFind) -> crate::Result<()>
-    {
+    fn handle_peer_find(&self, mut con: C, peer_find: PeerFind) -> crate::Result<()> {
         let (current, successor) = {
             let routing = self.routing.lock().unwrap();
-            (routing.current.clone(),
-             routing.successor.first().ok_or("Empty successor list")?.clone())
+            (
+                *routing.current,
+                *routing.successor.first().ok_or("Empty successor list")?,
+            )
         };
         let identifier = peer_find.identifier;
 
@@ -239,21 +262,19 @@ impl<C, A> P2PHandler<C, A> where
         Ok(())
     }
 
-    fn handle_successors_request(
-        &self,
-        mut con: C) -> crate::Result<()> {
+    fn handle_successors_request(&self, mut con: C) -> crate::Result<()> {
         let routing = self.routing.lock().unwrap();
         let mut successors = routing.successor.iter().map(|x| **x).collect();
         let mut successors_pred = if routing.get_predecessor_failed() {
             vec![]
         } else {
-           vec![*routing.predecessor]
+            vec![*routing.predecessor]
         };
 
         successors_pred.push(*routing.current);
         successors_pred.append(&mut successors);
         let successor_reply = SuccessorsReply {
-            successors: successors_pred
+            successors: successors_pred,
         };
         con.send(Message::SuccessorsReply(successor_reply))?;
 
@@ -263,29 +284,38 @@ impl<C, A> P2PHandler<C, A> where
     fn handle_predecessor_notify(
         &self,
         predecessor_notify: PredecessorNotify<A>,
-    ) -> crate::Result<()>
-    {
+    ) -> crate::Result<()> {
         let predecessor_addr = predecessor_notify.socket_addr;
         self.notify_predecessor(predecessor_addr);
         Ok(())
     }
 
-    fn put_keys(&self, peer_addr: A, keys: &Vec<Identifier>) {
+    fn put_keys(&self, peer_addr: A, keys: &[Identifier]) {
         if !keys.is_empty() {
             let connect = C::open(peer_addr, 3600);
-            let msg = Message::KeyPut(KeyPut { keys: keys.clone() });
-            if let Err(_) = connect.and_then(|mut con| con.send(msg)) {
-                info!("Failed to notify {} about keys it is responsible for.", peer_addr);
+            let msg = Message::KeyPut(KeyPut {
+                keys: keys.to_vec(),
+            });
+            if connect.and_then(|mut con| con.send(msg)).is_err() {
+                info!(
+                    "Failed to notify {} about keys it is responsible for.",
+                    peer_addr
+                );
             }
         }
     }
 
-    fn remove_keys(&self, peer_addr: A, keys: &Vec<Identifier>) {
+    fn remove_keys(&self, peer_addr: A, keys: &[Identifier]) {
         if !keys.is_empty() {
             let connect = C::open(peer_addr, 3600);
-            let msg = Message::KeyRemove(KeyRemove { keys: keys.clone() });
-            if let Err(_) = connect.and_then(|mut con| con.send(msg)) {
-                info!("Failed to notify {} about keys it is no longer responsible for.", peer_addr);
+            let msg = Message::KeyRemove(KeyRemove {
+                keys: keys.to_vec(),
+            });
+            if connect.and_then(|mut con| con.send(msg)).is_err() {
+                info!(
+                    "Failed to notify {} about keys it is no longer responsible for.",
+                    peer_addr
+                );
             }
         }
     }
@@ -293,23 +323,30 @@ impl<C, A> P2PHandler<C, A> where
     fn handle_successor_changes(
         &self,
         successor_changes: SuccessorListChanges<A>,
-    ) -> crate::Result<()>
-    {
-        let old_successors_set: HashSet<_> = HashSet::from_iter(successor_changes.old_successors.iter().map(|i| *i).clone());
-        let new_successors_set: HashSet<_> = HashSet::from_iter(successor_changes.new_successors.iter().map(|i| *i).clone());
+    ) -> crate::Result<()> {
+        let old_successors_set: HashSet<_> =
+            HashSet::from_iter(successor_changes.old_successors.iter().cloned());
+        let new_successors_set: HashSet<_> =
+            HashSet::from_iter(successor_changes.new_successors.iter().cloned());
 
-        let current = self.routing.lock().unwrap().current.clone();
+        let current = self.routing.lock().unwrap().current;
 
-        let own_keys: Vec<Identifier> = self.storage.lock().unwrap()
+        let own_keys: Vec<Identifier> = self
+            .storage
+            .lock()
+            .unwrap()
             .keys()
             .filter(|k| self.routing.lock().unwrap().responsible_for(**k))
-            .map(|k| k.clone())
+            .cloned()
             .collect();
 
         // all peers that are not in the successors list anymore
         for peer in old_successors_set.difference(&new_successors_set) {
             if peer.identifier() != current.identifier() {
-                println!("{} sends a remove key message (succs changed) to {:?} containing {:?}", *current, *peer, &own_keys);
+                println!(
+                    "{} sends a remove key message (succs changed) to {:?} containing {:?}",
+                    *current, *peer, &own_keys
+                );
                 self.remove_keys(*peer, &own_keys);
             }
         }
@@ -317,7 +354,10 @@ impl<C, A> P2PHandler<C, A> where
         // all peers that are new in the successors list
         for peer in new_successors_set.difference(&old_successors_set) {
             if peer.identifier() != current.identifier() {
-                println!("{} sends a put key message (succs changed) to {:?} containing {:?}", *current, *peer, &own_keys);
+                println!(
+                    "{} sends a put key message (succs changed) to {:?} containing {:?}",
+                    *current, *peer, &own_keys
+                );
                 self.put_keys(*peer, &own_keys);
             }
         }
@@ -325,8 +365,7 @@ impl<C, A> P2PHandler<C, A> where
         Ok(())
     }
 
-    fn handle_connection(&self, mut con: C) -> crate::Result<()>
-    {
+    fn handle_connection(&self, mut con: C) -> crate::Result<()> {
         let msg = con.receive()?;
 
         info!("P2P handler received message of type {}", msg);
@@ -342,10 +381,8 @@ impl<C, A> P2PHandler<C, A> where
             Message::SuccessorlistChanges(successor_changes) => {
                 self.handle_successor_changes(successor_changes)
             }
-            Message::KeyPut(put_keys) =>
-                self.handle_put_keys(put_keys),
-            Message::KeyRemove(remove_keys) =>
-                self.handle_remove_keys(remove_keys),
+            Message::KeyPut(put_keys) => self.handle_put_keys(put_keys),
+            Message::KeyRemove(remove_keys) => self.handle_remove_keys(remove_keys),
             _ => Err(Box::new(MessageError::new(msg))),
         }
     }
@@ -353,7 +390,11 @@ impl<C, A> P2PHandler<C, A> where
     fn handle_remove_keys(&self, remove_keys: KeyRemove) -> crate::Result<()> {
         let mut storage = self.storage.lock().unwrap();
 
-        println!("{} is going to remove {:?}", self.routing.lock().unwrap().current.identifier(), remove_keys);
+        println!(
+            "{} is going to remove {:?}",
+            self.routing.lock().unwrap().current.identifier(),
+            remove_keys
+        );
 
         for key in remove_keys.keys {
             storage.remove(&key);
@@ -366,7 +407,7 @@ impl<C, A> P2PHandler<C, A> where
         // TODO: implement concurrency
         for key in put_keys.keys {
             if !self.storage.lock().unwrap().contains_key(&key) {
-                let next = self.routing.lock().unwrap().closest_preceding_peer(key).clone();
+                let next = *self.routing.lock().unwrap().closest_preceding_peer(key);
                 if let Ok(Some(value)) = self.procedures.dht_get(key, *next) {
                     self.put_to_storage(key, value);
                 }
@@ -382,9 +423,9 @@ impl<C, A> P2PHandler<C, A> where
 }
 
 impl<A, C> ServerHandler<C> for P2PHandler<C, A>
-    where
-        C: ConnectionTrait<Address=A>,
-        A: PeerAddr,
+where
+    C: ConnectionTrait<Address = A>,
+    A: PeerAddr,
 {
     fn handle_connection(&self, connection: C) {
         if let Err(err) = P2PHandler::handle_connection(&self, connection) {
@@ -404,20 +445,23 @@ impl<C: ConnectionTrait<Address = A>, A: PeerAddr + Display + Sync> Display for 
 
         match (routing, storage) {
             (Ok(routing), Ok(storage)) => {
-                let addr = *routing.current;
-
                 let pred = *routing.predecessor;
 
-                let succ: Vec<_> = routing.successor.iter().map(|a| **a).collect();
+                let successors: Vec<_> = routing.successor.iter().map(|a| **a).collect();
                 let fingers: Vec<_> = routing.finger_table.iter().map(|a| **a).collect();
-                write!(f,
-               "Predecessor: {}\n\
-               Successors: {:?}\n\
-               Fingers: {:?}\n\
-               Storage: {}\n",
-                       pred, succ, fingers, display_storage(&storage))
+                write!(
+                    f,
+                    "Predecessor: {}\n\
+                     Successors: {:?}\n\
+                     Fingers: {:?}\n\
+                     Storage: {}\n",
+                    pred,
+                    successors,
+                    fingers,
+                    display_storage(&storage)
+                )
             }
-            _ => write!(f, "Peer locked...")
+            _ => write!(f, "Peer locked... (probably failed)"),
         }
     }
 }
@@ -426,11 +470,17 @@ fn display_storage(storage: &Storage) -> String {
     let mut tmp = String::new();
 
     for (k, v) in storage.iter() {
-        let hex =  k.as_bytes()[..8].iter()
+        let hex = k.as_bytes()[..8]
+            .iter()
             .map(|b| format!("{:02X}", b))
-            .collect::<Vec<_>>().join(":");
+            .collect::<Vec<_>>()
+            .join(":");
 
-        tmp.push_str(&format!("[{}..: {}], ", hex, std::str::from_utf8(v).unwrap()));
+        tmp.push_str(&format!(
+            "[{}..: {}], ",
+            hex,
+            std::str::from_utf8(v).unwrap()
+        ));
     }
 
     tmp

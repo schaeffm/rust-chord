@@ -10,8 +10,8 @@ use dht::Peer;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::process;
-use structopt::StructOpt;
 use std::sync::mpsc::channel;
+use structopt::StructOpt;
 
 #[derive(StructOpt, Debug)]
 #[structopt(

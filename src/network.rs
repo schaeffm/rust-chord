@@ -14,11 +14,11 @@ use std::io;
 use std::io::prelude::*;
 use std::io::Cursor;
 use std::net::*;
+use std::sync::mpsc::Receiver;
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 use threadpool::ThreadPool;
-use std::sync::mpsc::Receiver;
 
 const MAX_MESSAGE_SIZE: usize = 64000;
 
@@ -36,7 +36,16 @@ const MAX_MESSAGE_SIZE: usize = 64000;
 /// con.send(&msg).expect("could not send message");
 /// ```
 pub trait PeerAddr:
-    Clone + Copy + std::fmt::Display + std::fmt::Debug + std::cmp::PartialEq + Send + Identify + 'static + std::cmp::Eq + std::hash::Hash
+    Clone
+    + Copy
+    + std::fmt::Display
+    + std::fmt::Debug
+    + std::cmp::PartialEq
+    + Send
+    + Identify
+    + 'static
+    + std::cmp::Eq
+    + std::hash::Hash
 {
 }
 impl<T> PeerAddr for T where
@@ -135,7 +144,9 @@ impl ConnectionTrait for Connection {
 
     fn bind(addr: Self::Address) -> Result<Self::Listener> {
         let listener = TcpListener::bind(addr)?;
-        listener.set_nonblocking(true).expect("Cannot set non-blocking");
+        listener
+            .set_nonblocking(true)
+            .expect("Cannot set non-blocking");
         Ok(listener)
     }
 
@@ -373,11 +384,11 @@ impl<T: Send + Sync + 'static> Server<T> {
                 }
 
                 if let Ok(con) = C::accept(&listener) {
-                        // do something with the TcpStream
-                        let handler = Arc::clone(&self.handler);
-                        pool.execute(move || {
-                            handler.handle_connection(con);
-                        });
+                    // do something with the TcpStream
+                    let handler = Arc::clone(&self.handler);
+                    pool.execute(move || {
+                        handler.handle_connection(con);
+                    });
                 }
             }
         });

@@ -58,7 +58,6 @@ pub struct DhtFailure {
     pub key: [u8; 32],
 }
 
-
 impl MessagePayload for DhtPut {
     fn parse(reader: &mut dyn Read) -> io::Result<Self> {
         let ttl = reader.read_u16::<NetworkEndian>()?;

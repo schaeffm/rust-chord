@@ -32,8 +32,13 @@ pub struct Routing<T> {
 
 impl<T: Identify + Copy + Clone> Routing<T> {
     /// Creates a new `Routing` instance for the given initial values.
-    pub fn new(current: T, predecessor: T, successor: T, finger_table: Vec<T>, predecessor_failed: bool) -> Self {
-
+    pub fn new(
+        current: T,
+        predecessor: T,
+        successor: T,
+        finger_table: Vec<T>,
+        predecessor_failed: bool,
+    ) -> Self {
         Self {
             current: IdentifierValue::new(current),
             predecessor: IdentifierValue::new(predecessor),
@@ -52,7 +57,7 @@ impl<T: Identify + Copy + Clone> Routing<T> {
     }
 
     /// Sets the predecessor's address.
-    pub fn set_predecessor(&mut self, new_pred:T) {
+    pub fn set_predecessor(&mut self, new_pred: T) {
         self.predecessor_failed = false;
         self.predecessor = IdentifierValue::new(new_pred);
     }
@@ -80,14 +85,17 @@ impl<T: Identify + Copy + Clone> Routing<T> {
 
     /// Checks whether this peer is responsible for the given identifier.
     pub fn responsible_for(&self, identifier: Identifier) -> bool {
-            identifier.is_between_end(&self.predecessor.identifier(), &self.current.identifier())
+        identifier.is_between_end(&self.predecessor.identifier(), &self.current.identifier())
     }
 
     /// Returns the peer closest to the given identifier.
     pub fn closest_preceding_peer(&self, identifier: Identifier) -> &IdentifierValue<T> {
         for finger in &self.finger_table {
-            if finger.identifier().is_between(&self.current.identifier(), &identifier) {
-                return finger
+            if finger
+                .identifier()
+                .is_between(&self.current.identifier(), &identifier)
+            {
+                return finger;
             }
         }
         return self.successor.first().unwrap();
@@ -99,17 +107,19 @@ impl<T: Identify + Copy + Clone> Routing<T> {
             if last.identifier() == self.current.identifier() {
                 return None;
             }
-            if let Some ((fst_index, _)) = self.successor
+            if let Some((fst_index, _)) = self
+                .successor
                 .iter()
                 .enumerate()
-                .find(|(i, x)| x.identifier() == last.identifier()) {
+                .find(|(i, x)| x.identifier() == last.identifier())
+            {
                 if fst_index == 3 {
-                    return Some(last)
+                    return Some(last);
                 }
             }
         }
 
-        return None
+        return None;
     }
 
     pub fn preds_consistent(_peers: Vec<Self>) -> bool {

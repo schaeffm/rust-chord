@@ -16,7 +16,7 @@
 
 use crate::key::Key;
 use bigint::U256;
-use sha2::{Sha256, Digest};
+use sha2::{Digest, Sha256};
 use std::fmt;
 use std::net::{SocketAddr, SocketAddrV4, SocketAddrV6};
 use std::ops::Deref;
